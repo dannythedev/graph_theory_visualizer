@@ -16,18 +16,17 @@ class PhysicsSystem:
                 connected.add(e.start)
         return connected
 
-    def nudge_neighbors(self, moved_vertex, new_pos, old_pos):
+    def nudge_neighbors(self, moved_vertex, new_pos, old_pos, strength=0.02):
         dx = new_pos[0] - old_pos[0]
         dy = new_pos[1] - old_pos[1]
         if dx == 0 and dy == 0:
             return
 
-        follow_strength = 0.02
         for neighbor in self.get_connected(moved_vertex):
             if neighbor not in self.velocities:
                 self.velocities[neighbor] = [0.0, 0.0]
-            self.velocities[neighbor][0] += dx * follow_strength
-            self.velocities[neighbor][1] += dy * follow_strength
+            self.velocities[neighbor][0] += dx * strength
+            self.velocities[neighbor][1] += dy * strength
 
     def update(self):
         damping = 0.75

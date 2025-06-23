@@ -133,9 +133,13 @@ class ZoomManager:
         self.scale = new_scale
 
 def main():
-    directed = False  # start with undirected mode
-
     pygame.init()
+
+    directed = False  # start with undirected mode
+    component_dragging = False
+    component_vertices = []
+    component_drag_start_pos = None
+
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("Graph Theory Drawer")
     clock = pygame.time.Clock()
@@ -226,6 +230,11 @@ def main():
                     if not hovered_vertex and not hovered_edge:
                         panning = True
                         last_mouse_pos = pos
+                elif event.button == 2 and hovered_vertex:
+                    moving_vertex = hovered_vertex
+                    drag_start_pos = pos
+                    dragging = False
+                    scroll_drag_strength = 0.25  # Much stronger nudge
 
                 if SAVE_BUTTON_RECT.collidepoint(pos):
                     save_graph(vertices, edges)
@@ -366,7 +375,9 @@ def main():
                         old_pos = moving_vertex.pos[:]
                         moving_vertex.pos = list(pos)
                         physics.velocities[moving_vertex] = [0.0, 0.0]  # Freeze physics interference
-                        physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos)
+                        is_middle = pygame.mouse.get_pressed()[1]  # True if scroll button held
+                        strength = scroll_drag_strength if is_middle else 0.02
+                        physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos, strength=strength)
                 else:
                     if panning and last_mouse_pos:
                         dx = pos[0] - last_mouse_pos[0]
