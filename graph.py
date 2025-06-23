@@ -1,7 +1,3 @@
-import pygame
-from config import VERTEX_RADIUS, EDGE_CLICK_RADIUS, VERTEX_OUTLINE_COLOR, VERTEX_COLOR, VERTEX_HOVER_COLOR, SELECTED_COLOR
-from config import FONT
-
 class Vertex:
     def __init__(self, pos, name):
         self.pos = list(pos)
@@ -97,3 +93,30 @@ def edge_exists(v1, v2, edge_lookup):
 
 def rebuild_edge_lookup(edges):
     return set((min(e.start.name, e.end.name), max(e.start.name, e.end.name)) for e in edges)
+
+def duplicate_graph(vertices, edges, offset=(200, 0)):
+    """Duplicates the current graph and offsets it to the right. Names become A', B', etc."""
+    name_map = {}
+    existing_names = {v.name for v in vertices}
+    new_vertices = []
+
+    for v in vertices:
+        new_name = f"{v.name}'"
+        # Ensure uniqueness in case user already used names like A'
+        while new_name in existing_names:
+            new_name += "'"
+        existing_names.add(new_name)
+
+        new_pos = [v.pos[0] + offset[0], v.pos[1] + offset[1]]
+        dup = Vertex(new_pos, new_name)
+        name_map[v.name] = dup
+        new_vertices.append(dup)
+
+    vertices.extend(new_vertices)
+
+    for e in edges:
+        if e.start.name in name_map and e.end.name in name_map:
+            new_edge = Edge(name_map[e.start.name], name_map[e.end.name], e.value)
+            edges.append(new_edge)
+
+    return True

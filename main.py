@@ -5,7 +5,7 @@ import json
 
 from diagnostics import GraphDiagnostics
 from config import *
-from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos
+from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
 
@@ -241,7 +241,11 @@ def main():
                     vertex_names = load_graph("graph.json", vertices, edges)
                     mark_all_problems_dirty(np_problems)
                     diagnostics.mark_dirty()
-
+                    continue
+                elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
+                    if duplicate_graph(vertices, edges, offset=(200, 0)):
+                        mark_all_problems_dirty(np_problems)
+                        diagnostics.mark_dirty()
                     continue
                 elif K_INPUT_BOX_RECT.collidepoint(pos):
                     k_input_active = True
@@ -360,7 +364,8 @@ def main():
                                     LOAD_BUTTON_RECT.collidepoint(pos) or
                                     K_INPUT_BOX_RECT.collidepoint(pos) or
                                     TOGGLE_DIRECTED_RECT.collidepoint(pos) or
-                                    CLEAR_BUTTON_RECT.collidepoint(pos)
+                                    CLEAR_BUTTON_RECT.collidepoint(pos) or
+                                    DUPLICATE_BUTTON_RECT.collidepoint(pos)
                             ):
                                 try:
                                     name = next(vertex_names)
@@ -426,6 +431,8 @@ def main():
         draw_button(screen, LOAD_BUTTON_RECT, "Load", load_hovered)
         clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
         draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
+        duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
+        draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
         k_label = FONT.render(f"k: {input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
