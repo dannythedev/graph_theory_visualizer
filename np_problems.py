@@ -85,32 +85,27 @@ class IndependentSetSolver(NPProblem):
                 return True, names
         return False, []
 
+
 class CliqueSolver(NPProblem):
-    def __init__(self, v, e): super().__init__("CLIQUE", v, e)
+    def __init__(self, v, e):
+        super().__init__("CLIQUE", v, e)
+
     def compute(self, k, directed=False):
-        if k > len(self.vertices):
+        if k < 1 or len(self.vertices) < k:
             return False, []
 
-        # Pre-check: any node with degree < k-1 can't be in a k-clique
+        # Always treat as undirected
         adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
+        for edge in self.edges:
+            adj[edge.start.name].add(edge.end.name)
+            adj[edge.end.name].add(edge.start.name)
 
-        if any(len(neighbors) < k - 1 for neighbors in adj.values()):
-            return False, []
-
-
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
-        for combo in itertools.combinations(self.vertices, k):
-            names = [v.name for v in combo]
-            if all(n2 in adj[n1] for i, n1 in enumerate(names) for n2 in names[i+1:]):
+        # Try all vertex sets of size k
+        for group in itertools.combinations(self.vertices, k):
+            names = [v.name for v in group]
+            if all(n2 in adj[n1] for n1, n2 in itertools.combinations(names, 2)):
                 return True, names
+
         return False, []
 
 class VertexCoverSolver(NPProblem):
