@@ -136,9 +136,7 @@ def main():
     pygame.init()
 
     directed = False  # start with undirected mode
-    component_dragging = False
-    component_vertices = []
-    component_drag_start_pos = None
+
 
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("Graph Theory Drawer")
@@ -357,13 +355,20 @@ def main():
                         dist = math.hypot(pos[0] - mouse_down_pos[0], pos[1] - mouse_down_pos[1])
 
                         if held <= 200 and dist <= 5:
-                            if not hovered_vertex and not hovered_edge:
+                            if not hovered_vertex and not hovered_edge and not (
+                                    SAVE_BUTTON_RECT.collidepoint(pos) or
+                                    LOAD_BUTTON_RECT.collidepoint(pos) or
+                                    K_INPUT_BOX_RECT.collidepoint(pos) or
+                                    TOGGLE_DIRECTED_RECT.collidepoint(pos) or
+                                    CLEAR_BUTTON_RECT.collidepoint(pos)
+                            ):
                                 try:
                                     name = next(vertex_names)
                                     vertices.append(Vertex(pos, name))
                                     mark_all_problems_dirty(np_problems)
                                 except StopIteration:
                                     print("No more vertex names available.")
+
 
             elif event.type == pygame.MOUSEMOTION:
                 if moving_vertex:
