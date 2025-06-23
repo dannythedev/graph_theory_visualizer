@@ -1,0 +1,33 @@
+import pygame
+
+pygame.font.init()
+
+# Colors
+BACKGROUND_COLOR = (30, 30, 30)
+VERTEX_COLOR = (100, 149, 237)
+VERTEX_HOVER_COLOR = (70, 130, 180)
+EDGE_COLOR = (170, 170, 170)
+EDGE_HOVER_COLOR = (225, 225, 225)
+SELECTED_COLOR = (255, 99, 71)
+VERTEX_OUTLINE_COLOR = (255, 255, 255)
+BUTTON_COLOR = (50, 50, 50)
+BUTTON_HOVER_COLOR = (70, 70, 70)
+BUTTON_TEXT_COLOR = (255, 255, 255)
+INPUT_BOX_COLOR = (40, 40, 40)
+INPUT_TEXT_COLOR = (255, 255, 255)
+
+# Dimensions
+VERTEX_RADIUS = 20
+EDGE_CLICK_RADIUS = 15
+VERTEX_OUTLINE_WIDTH = 4
+DOUBLE_CLICK_TIME = 400
+
+# Fonts
+FONT = pygame.font.SysFont("poppins", 18)
+INPUT_FONT = pygame.font.SysFont("poppins", 22, bold=True)
+DEBUG_FONT = pygame.font.SysFont("consolas", 16)
+
+# Buttons
+SAVE_BUTTON_RECT = pygame.Rect(10, 10, 100, 36)
+LOAD_BUTTON_RECT = pygame.Rect(120, 10, 100, 36)
+K_INPUT_BOX_RECT = pygame.Rect(230, 10, 60, 36)
