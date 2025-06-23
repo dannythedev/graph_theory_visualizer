@@ -5,6 +5,7 @@ A powerful interactive tool for building, analyzing, and visualizing graphs and 
 ---
 
 ## 🎯 Features
+![image](https://github.com/user-attachments/assets/27e9c894-9eb3-408d-a8ab-4ab9f1609fe5)
 
 ### 🧱 Graph Construction
 - **Add Vertices**: Left-click on empty space.
