@@ -20,6 +20,10 @@ class Vertex:
         dy = self.pos[1] - pos[1]
         return dx * dx + dy * dy <= VERTEX_RADIUS ** 2
 
+import math
+import pygame
+from config import *
+
 class Edge:
     def __init__(self, start, end, value=None):
         self.start = start
@@ -27,13 +31,43 @@ class Edge:
         self.value = value
         self.highlight = False
 
-    def draw(self, screen):
-        color = (225, 225, 225) if self.highlight else (170, 170, 170)
-        pygame.draw.line(screen, color, self.start.pos, self.end.pos, 2)
+    def draw(self, screen, directed=False, offset_angle=0):
+        color = EDGE_HOVER_COLOR if self.highlight else EDGE_COLOR
+        x1, y1 = self.start.pos
+        x2, y2 = self.end.pos
+
+        # Optional offset for opposite direction arrow
+        dx, dy = x2 - x1, y2 - y1
+        angle = math.atan2(dy, dx)
+        if offset_angle != 0:
+            offset = 5
+            x1 += -offset * math.sin(angle + offset_angle)
+            y1 += offset * math.cos(angle + offset_angle)
+            x2 += -offset * math.sin(angle + offset_angle)
+            y2 += offset * math.cos(angle + offset_angle)
+
+        pygame.draw.line(screen, color, (x1, y1), (x2, y2), 2)
+
         if self.value:
-            mid = [(s + e) // 2 for s, e in zip(self.start.pos, self.end.pos)]
+            mid = ((x1 + x2) // 2, (y1 + y2) // 2)
             label = FONT.render(str(self.value), True, color)
             screen.blit(label, label.get_rect(center=mid))
+
+        if directed:
+            self._draw_arrowhead(screen, x1, y1, x2, y2, color)
+
+    def _draw_arrowhead(self, screen, x1, y1, x2, y2, color):
+        angle = math.atan2(y2 - y1, x2 - x1)
+        offset = VERTEX_RADIUS + 4  # Pull arrow back from center
+        tip_x = x2 - offset * math.cos(angle)
+        tip_y = y2 - offset * math.sin(angle)
+
+        length = 10
+        left = (tip_x - length * math.cos(angle - math.pi / 6),
+                tip_y - length * math.sin(angle - math.pi / 6))
+        right = (tip_x - length * math.cos(angle + math.pi / 6),
+                 tip_y - length * math.sin(angle + math.pi / 6))
+        pygame.draw.polygon(screen, color, [(tip_x, tip_y), left, right])
 
     def is_clicked(self, pos):
         x1, y1 = self.start.pos

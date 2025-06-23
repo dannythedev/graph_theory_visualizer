@@ -1,9 +1,10 @@
+import math
 import sys
 import string
 import json
 
 from config import *
-from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, edge_exists, rebuild_edge_lookup
+from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
 
@@ -36,6 +37,8 @@ def update_k_value_from_input(input_text):
         return None
 
 def main():
+    directed = False  # start with undirected mode
+
     pygame.init()
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("Graph Theory Drawer")
@@ -43,7 +46,6 @@ def main():
 
     vertices, edges = [], []
     vertex_names = iter(string.ascii_uppercase)
-    edge_lookup = set()
     selected_vertex = None
     moving_vertex = None
     dragging = False
@@ -51,7 +53,6 @@ def main():
     click_times = []
     k_input_active = False
     k_value = 5
-    hovered_problem = None
     np_problems = get_all_problems(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
 
@@ -109,12 +110,46 @@ def main():
                     continue
                 elif LOAD_BUTTON_RECT.collidepoint(pos):
                     vertex_names = load_graph("graph.json", vertices, edges)
-                    edge_lookup = rebuild_edge_lookup(edges)
                     mark_all_problems_dirty(np_problems)
                     continue
                 elif K_INPUT_BOX_RECT.collidepoint(pos):
                     k_input_active = True
                     input_text = str(k_value)
+                    continue
+                elif CLEAR_BUTTON_RECT.collidepoint(pos):
+                    vertices.clear()
+                    edges.clear()
+                    selected_vertex = None
+                    vertex_names = iter(string.ascii_uppercase)
+                    mark_all_problems_dirty(np_problems)
+                    continue
+                elif TOGGLE_DIRECTED_RECT.collidepoint(pos):
+                    directed = not directed
+                    if directed:
+                        # Convert undirected to directed (random directions)
+                        import random
+                        new_edges = []
+                        for e in edges:
+                            if not any(e2.start == e.end and e2.end == e.start for e2 in edges):
+                                if random.choice([True, False]):
+                                    new_edges.append(e)
+                                else:
+                                    new_edges.append(Edge(e.end, e.start, e.value))
+                            else:
+                                new_edges.append(e)  # already bidirectional
+                        edges[:] = new_edges
+                    else:
+                        # Remove reverse-direction duplicates
+                        seen = set()
+                        new_edges = []
+                        for e in edges:
+                            key = tuple(sorted([e.start.name, e.end.name]))
+                            if key not in seen:
+                                new_edges.append(e)
+                                seen.add(key)
+                        edges[:] = new_edges
+
+                    mark_all_problems_dirty(np_problems)
                     continue
 
                 clicked_vertex = hovered_vertex
@@ -142,24 +177,25 @@ def main():
                     if clicked_vertex:
                         edges[:] = [e for e in edges if e.start != clicked_vertex and e.end != clicked_vertex]
                         vertices.remove(clicked_vertex)
-                        edge_lookup = rebuild_edge_lookup(edges)
                         selected_vertex = None
                     elif clicked_edge:
                         edges.remove(clicked_edge)
-                        edge_lookup = rebuild_edge_lookup(edges)
                     mark_all_problems_dirty(np_problems)
                     continue
 
                 if clicked_vertex:
-                    if selected_vertex and selected_vertex != clicked_vertex and not edge_exists(selected_vertex, clicked_vertex, edge_lookup):
-                        edges.append(Edge(selected_vertex, clicked_vertex))
-                        edge_lookup = rebuild_edge_lookup(edges)
+                    if selected_vertex and selected_vertex != clicked_vertex:
+                        # Prevent duplicate edges in same direction
+                        already_exists = any(e.start == selected_vertex and e.end == clicked_vertex for e in edges)
+                        if not already_exists:
+                            edges.append(Edge(selected_vertex, clicked_vertex))
                         selected_vertex = None
+                        mark_all_problems_dirty(np_problems)
                     else:
                         selected_vertex = clicked_vertex
                         moving_vertex = clicked_vertex
                         dragging = True
-                    mark_all_problems_dirty(np_problems)
+
                 elif not clicked_edge:
                     try:
                         name = next(vertex_names)
@@ -180,7 +216,7 @@ def main():
         hovered_problem = None
         y = 60
         for solver in np_problems:
-            y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos)
+            y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed)
             if hovered:
                 hovered_problem = solver
 
@@ -192,13 +228,21 @@ def main():
             for v in vertices:
                 v.highlight = v.name in member_set
 
+
         for edge in edges:
-            edge.draw(screen)
+            is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
+            offset = math.pi / 18 if is_opposite and directed else 0
+            edge.draw(screen, directed=directed, offset_angle=offset)
+
         for vertex in vertices:
             vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
-
+        toggle_text = "Directed: ON" if directed else "Directed: OFF"
+        toggle_hovered = TOGGLE_DIRECTED_RECT.collidepoint(pos)
+        draw_button(screen, TOGGLE_DIRECTED_RECT, toggle_text, toggle_hovered)
         draw_button(screen, SAVE_BUTTON_RECT, "Save", save_hovered)
         draw_button(screen, LOAD_BUTTON_RECT, "Load", load_hovered)
+        clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
+        draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
         k_label = FONT.render(f"k: {input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
