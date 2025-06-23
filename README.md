@@ -1,4 +1,4 @@
-# Graph Theory Drawer
+# Graph Theory Visualizer
 
 A powerful interactive tool for building, analyzing, and visualizing graphs and NP-complete problems. Built using Python and Pygame, it supports intuitive mouse-driven graph construction and live updates of graph-theoretic diagnostics and problem-solving visualizations.
 
