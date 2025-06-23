@@ -25,7 +25,6 @@ class Vertex:
         return dx * dx + dy * dy <= VERTEX_RADIUS ** 2
 
 import math
-import pygame
 from config import *
 
 class Edge:

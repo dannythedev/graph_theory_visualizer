@@ -111,6 +111,26 @@ def apply_kcolor_highlight(solver, hovered, vertices):
             except Exception as e:
                 print(f"Error parsing k-color group '{group}':", e)
 
+class ZoomManager:
+    def __init__(self):
+        self.scale = 1.0
+        self.min_scale = 0.4
+        self.max_scale = 2.0
+
+    def apply_zoom(self, zoom_in, center, vertices):
+        factor = 1.1 if zoom_in else 0.9
+        new_scale = self.scale * factor
+        if not (self.min_scale <= new_scale <= self.max_scale):
+            return
+
+        cx, cy = center
+        for v in vertices:
+            dx = v.pos[0] - cx
+            dy = v.pos[1] - cy
+            v.pos[0] = int(cx + dx * factor)
+            v.pos[1] = int(cy + dy * factor)
+
+        self.scale = new_scale
 
 def main():
     directed = False  # start with undirected mode
@@ -119,6 +139,7 @@ def main():
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("Graph Theory Drawer")
     clock = pygame.time.Clock()
+    zoom = ZoomManager()
 
     vertices, edges = [], []
     vertex_names = iter(string.ascii_uppercase)
@@ -189,6 +210,13 @@ def main():
 
             elif event.type == pygame.MOUSEBUTTONDOWN and not input_mode:
                 pos = event.pos
+                if event.button == 4:  # Scroll up = zoom in
+                    zoom.apply_zoom(zoom_in=True, center=pos, vertices=vertices)
+                    continue
+                elif event.button == 5:  # Scroll down = zoom out
+                    zoom.apply_zoom(zoom_in=False, center=pos, vertices=vertices)
+                    continue
+
                 if SAVE_BUTTON_RECT.collidepoint(pos):
                     save_graph(vertices, edges)
                     continue
