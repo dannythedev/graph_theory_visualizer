@@ -140,6 +140,10 @@ def main():
     pygame.display.set_caption("Graph Theory Drawer")
     clock = pygame.time.Clock()
     zoom = ZoomManager()
+    mouse_down_time = None
+    mouse_down_pos = None
+    panning = False
+    last_mouse_pos = None
 
     vertices, edges = [], []
     vertex_names = iter(string.ascii_uppercase)
@@ -216,6 +220,12 @@ def main():
                 elif event.button == 5:  # Scroll down = zoom out
                     zoom.apply_zoom(zoom_in=False, center=pos, vertices=vertices)
                     continue
+                elif event.button == 1:  # Left mouse down
+                    mouse_down_time = pygame.time.get_ticks()
+                    mouse_down_pos = pos
+                    if not hovered_vertex and not hovered_edge:
+                        panning = True
+                        last_mouse_pos = pos
 
                 if SAVE_BUTTON_RECT.collidepoint(pos):
                     save_graph(vertices, edges)
@@ -326,33 +336,45 @@ def main():
                         drag_start_pos = pos
                         dragging = False
 
-
-
-                elif not clicked_edge:
-                    try:
-                        name = next(vertex_names)
-                        vertices.append(Vertex(pos, name))
-                        mark_all_problems_dirty(np_problems)
-                        diagnostics.mark_dirty()
-
-                    except StopIteration:
-                        print("No more vertex names available.")
-
             elif event.type == pygame.MOUSEBUTTONUP:
                 dragging = False
                 moving_vertex = None
 
+                if event.button == 1:
+                    panning = False
+                    last_mouse_pos = None
+                    if mouse_down_time:
+                        held = pygame.time.get_ticks() - mouse_down_time
+                        dist = math.hypot(pos[0] - mouse_down_pos[0], pos[1] - mouse_down_pos[1])
 
-            elif event.type == pygame.MOUSEMOTION and moving_vertex:
-                dx = pos[0] - drag_start_pos[0]
-                dy = pos[1] - drag_start_pos[1]
-                if not dragging and (dx * dx + dy * dy) > DRAG_THRESHOLD * DRAG_THRESHOLD:
-                    dragging = True  # Now start dragging
-                if dragging:
-                    old_pos = moving_vertex.pos[:]
-                    moving_vertex.pos = list(pos)
-                    physics.velocities[moving_vertex] = [0.0, 0.0]  # Freeze physics interference
-                    physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos)
+                        if held <= 200 and dist <= 5:
+                            if not hovered_vertex and not hovered_edge:
+                                try:
+                                    name = next(vertex_names)
+                                    vertices.append(Vertex(pos, name))
+                                    mark_all_problems_dirty(np_problems)
+                                except StopIteration:
+                                    print("No more vertex names available.")
+
+            elif event.type == pygame.MOUSEMOTION:
+                if moving_vertex:
+                    dx = pos[0] - drag_start_pos[0]
+                    dy = pos[1] - drag_start_pos[1]
+                    if not dragging and (dx * dx + dy * dy) > DRAG_THRESHOLD * DRAG_THRESHOLD:
+                        dragging = True  # Now start dragging
+                    if dragging:
+                        old_pos = moving_vertex.pos[:]
+                        moving_vertex.pos = list(pos)
+                        physics.velocities[moving_vertex] = [0.0, 0.0]  # Freeze physics interference
+                        physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos)
+                else:
+                    if panning and last_mouse_pos:
+                        dx = pos[0] - last_mouse_pos[0]
+                        dy = pos[1] - last_mouse_pos[1]
+                        for v in vertices:
+                            v.pos[0] += dx
+                            v.pos[1] += dy
+                        last_mouse_pos = pos
 
         hovered_problem = None
         y = 60
