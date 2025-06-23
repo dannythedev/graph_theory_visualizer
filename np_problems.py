@@ -38,7 +38,7 @@ class NPProblem:
         title = self.name
         k_input = f"k={k}" if self.name != "HAMPATH" else ""
         if found is None:
-            result = "..."
+            result = "Undefined"
         elif found and members:
             result = ", ".join(members)
         else:
@@ -176,6 +176,9 @@ class KColoringSolver(NPProblem):
         super().__init__("k-COLORING", v, e)
 
     def compute(self, k, directed=False):
+        if directed:
+            return None, []
+
         if k < 1 or len(self.vertices) == 0:
             return False, []
 
@@ -221,11 +224,11 @@ class KColoringSolver(NPProblem):
 
 def get_all_problems(vertices, edges):
     return [
+        KColoringSolver(vertices, edges),
         IndependentSetSolver(vertices, edges),
         CliqueSolver(vertices, edges),
         VertexCoverSolver(vertices, edges),
-        HamiltonianPathSolver(vertices, edges),
-        KColoringSolver(vertices, edges)
+        HamiltonianPathSolver(vertices, edges)
     ]
 
 

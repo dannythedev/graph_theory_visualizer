@@ -17,14 +17,34 @@ def save_graph(vertices, edges, filename="graph.json"):
         }, f)
 
 def load_graph(filename, vertices, edges):
-    with open(filename, "r") as f:
-        data = json.load(f)
-    name_map = {v["name"]: Vertex(v["pos"], v["name"]) for v in data["vertices"]}
-    vertices.clear()
-    vertices.extend(name_map.values())
-    edges.clear()
-    edges.extend(Edge(name_map[e["start"]], name_map[e["end"]], e.get("value")) for e in data["edges"])
-    return iter(name for name in string.ascii_uppercase if name not in name_map)
+    try:
+        with open(filename, "r") as f:
+            data = json.load(f)
+
+        # Validate presence of required fields
+        if "vertices" not in data or "edges" not in data:
+            raise ValueError("Invalid file format: missing 'vertices' or 'edges'.")
+
+        name_map = {
+            v["name"]: Vertex(v["pos"], v["name"])
+            for v in data["vertices"]
+        }
+
+        vertices.clear()
+        vertices.extend(name_map.values())
+        edges.clear()
+        edges.extend(
+            Edge(name_map[e["start"]], name_map[e["end"]], e.get("value"))
+            for e in data["edges"]
+        )
+
+        # Return iterator of unused names
+        return iter(name for name in string.ascii_uppercase if name not in name_map)
+
+    except Exception as e:
+        print(f"[ERROR] Failed to load graph from '{filename}': {e}")
+        return iter(string.ascii_uppercase)  # Fallback: fresh name iterator
+
 
 def draw_button(screen, rect, text, hovered):
     pygame.draw.rect(screen, BUTTON_HOVER_COLOR if hovered else BUTTON_COLOR, rect, border_radius=8)
@@ -42,7 +62,54 @@ def draw_fps(screen, clock):
     text = DEBUG_FONT.render(f"{fps} FPS", True, (150, 255, 150))
     screen.blit(text, text.get_rect(bottomright=(790, 590)))
 
+import colorsys
 
+# Colors to avoid (RGB)
+AVOID_COLORS = [
+    (100, 149, 237),  # VERTEX_COLOR
+    (70, 130, 180),   # VERTEX_HOVER_COLOR
+    (255, 99, 71),    # SELECTED_COLOR
+]
+
+def color_distance(c1, c2):
+    # Euclidean distance in RGB
+    return sum((a - b) ** 2 for a, b in zip(c1, c2)) ** 0.5
+
+def generate_color_for_index(i):
+    for attempt in range(10):  # Try 10 variations per index
+        h = ((i + attempt * 0.2) * 0.618033988749895) % 1.0  # Golden ratio spread
+        s = 0.5  # Moderate saturation
+        v = 0.85  # Not too bright
+
+        r, g, b = colorsys.hsv_to_rgb(h, s, v)
+        rgb = (int(r * 255), int(g * 255), int(b * 255))
+
+        # Make sure it's not too close to any UI color
+        if all(color_distance(rgb, avoid) > 60 for avoid in AVOID_COLORS):
+            return rgb
+
+    # Fallback if all were too close
+    return rgb
+
+
+def apply_kcolor_highlight(solver, hovered, vertices):
+    # Clear all custom colors by default
+    for v in vertices:
+        v.custom_color = None
+
+    # Only highlight if hovering and result is valid
+    if hovered and solver.result[0] and solver.result[1]:
+        groups = solver.result[1]
+        for i, group in enumerate(groups):
+            try:
+                group_label, raw_members = group.split(":")
+                node_names = raw_members.strip(" []").split(", ")
+                color = generate_color_for_index(i)
+                for v in vertices:
+                    if v.name in node_names:
+                        v.custom_color = color
+            except Exception as e:
+                print(f"Error parsing k-color group '{group}':", e)
 
 
 def main():
@@ -61,7 +128,7 @@ def main():
     input_mode, input_target, input_text = None, None, ""
     click_times = []
     k_input_active = False
-    k_value = 5
+    k_value = 3
     np_problems = get_all_problems(vertices, edges)
     diagnostics = GraphDiagnostics(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
@@ -263,6 +330,10 @@ def main():
         y = 60
         for solver in np_problems:
             y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed)
+
+            if solver.name == "k-COLORING":
+                apply_kcolor_highlight(solver, hovered, vertices)
+
             if hovered:
                 hovered_problem = solver
 

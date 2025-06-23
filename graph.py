@@ -9,7 +9,11 @@ class Vertex:
         self.highlight = False
 
     def draw(self, screen, selected=False, hovered=False):
-        color = SELECTED_COLOR if self.highlight or selected else VERTEX_HOVER_COLOR if hovered else VERTEX_COLOR
+        if self.custom_color:
+            color = self.custom_color
+        else:
+            color = SELECTED_COLOR if self.highlight or selected else VERTEX_HOVER_COLOR if hovered else VERTEX_COLOR
+
         pygame.draw.circle(screen, VERTEX_OUTLINE_COLOR, self.pos, VERTEX_RADIUS + 2)
         pygame.draw.circle(screen, color, self.pos, VERTEX_RADIUS)
         label = FONT.render(self.name, True, (255, 255, 255))
