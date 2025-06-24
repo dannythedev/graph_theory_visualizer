@@ -127,66 +127,68 @@ def is_within_screen(positions, screen_rect):
             return False
     return True
 
-def duplicate_graph(vertices, edges, offset_step=(200, 0), max_attempts=5):
+def duplicate_graph(og_vertices, og_edges, offset_step=(200, 0), max_attempts=5, times=1):
     """
-    Tries to duplicate graph to the right, then down, based on screen space.
-    Falls back to offscreen duplication only if needed.
+    Duplicates the original graph `times` number of times.
+    Each copy is offset by `offset_step` * i.
     """
-    # Get current screen size
-
     screen_rect = pygame.display.get_surface().get_rect()
 
-    name_map = {}
-    existing_names = {v.name for v in vertices}
-    new_vertices = []
+    # Track all added elements
+    all_new_vertices = []
+    all_new_edges = []
+    existing_names = {v.name for v in og_vertices}
+    base_vertices = og_vertices
+    base_edges = og_edges
 
-    # Prepare potential offsets: right first, then down
-    offset_directions = [
-        (offset_step[0], 0),  # right
-        (0, offset_step[0]),  # down
-        (offset_step[0], offset_step[0])  # fallback: diagonal
-    ]
+    for i in range(times):
+        dx = offset_step[0] * (i + 1)
+        dy = offset_step[1] * (i + 1)
 
-    for dx, dy in offset_directions:
-        candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in vertices]
-        if is_clear_position(vertices, candidate_positions) and is_within_screen(candidate_positions, screen_rect):
-            chosen_offset = (dx, dy)
-            break
-    else:
-        # If nothing fits onscreen and clean, just shift right far
-        chosen_offset = (offset_step[0] * (max_attempts + 2), 0)
+        candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in base_vertices]
 
-    dx, dy = chosen_offset
+        if not is_clear_position(og_vertices + all_new_vertices, candidate_positions) or \
+           not is_within_screen(candidate_positions, screen_rect):
+            print(f"[INFO] Skipping duplication #{i+1} — space invalid.")
+            continue
 
-    for v in vertices:
-        base, _ = get_base_and_index(v.name)
+        name_map = {}
+        new_vertices = []
 
-        used_suffixes = {
-            get_base_and_index(name)[1]
-            for name in existing_names
-            if get_base_and_index(name)[0] == base
-        }
+        for v in base_vertices:
+            base, _ = get_base_and_index(v.name)
 
-        new_index = 2
-        while new_index in used_suffixes:
-            new_index += 1
+            used_suffixes = {
+                get_base_and_index(name)[1]
+                for name in existing_names
+                if get_base_and_index(name)[0] == base
+            }
 
-        new_name = f"{base}_{new_index}"
-        existing_names.add(new_name)
+            new_index = 2
+            while new_index in used_suffixes:
+                new_index += 1
 
-        new_pos = [v.pos[0] + dx, v.pos[1] + dy]
-        dup = Vertex(new_pos, new_name)
-        name_map[v.name] = dup
-        new_vertices.append(dup)
+            new_name = f"{base}_{new_index}"
+            existing_names.add(new_name)
 
-    if len(vertices) + len(new_vertices) > 50:
-        print("[INFO] Duplication would exceed 50 vertex limit. Aborting.")
-        return False
+            new_pos = [v.pos[0] + dx, v.pos[1] + dy]
+            dup = Vertex(new_pos, new_name)
+            name_map[v.name] = dup
+            new_vertices.append(dup)
 
-    vertices.extend(new_vertices)
+        new_edges = [
+            Edge(name_map[e.start.name], name_map[e.end.name], e.value)
+            for e in base_edges if e.start.name in name_map and e.end.name in name_map
+        ]
 
-    for e in edges:
-        if e.start.name in name_map and e.end.name in name_map:
-            edges.append(Edge(name_map[e.start.name], name_map[e.end.name], e.value))
+        if len(og_vertices) + len(all_new_vertices) + len(new_vertices) > 50:
+            print("[INFO] Duplication would exceed 50 vertex limit. Aborting.")
+            return False
 
+        all_new_vertices.extend(new_vertices)
+        all_new_edges.extend(new_edges)
+
+    # Extend the actual lists once
+    og_vertices.extend(all_new_vertices)
+    og_edges.extend(all_new_edges)
     return True

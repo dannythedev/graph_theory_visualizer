@@ -226,6 +226,29 @@ def main():
     drag_start_pos = None
     DRAG_THRESHOLD = 5  # Minimum pixels before treating as a drag
 
+    def logic_all_buttons():
+        return not hovered_vertex and not hovered_edge and not (
+                SAVE_BUTTON_RECT.collidepoint(pos) or
+                LOAD_BUTTON_RECT.collidepoint(pos) or
+                K_INPUT_BOX_RECT.collidepoint(pos) or
+                TOGGLE_DIRECTED_RECT.collidepoint(pos) or
+                CLEAR_BUTTON_RECT.collidepoint(pos) or
+                DUPLICATE_BUTTON_RECT.collidepoint(pos))
+
+    def draw_all_buttons():
+        save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)
+        load_hovered = LOAD_BUTTON_RECT.collidepoint(pos)
+        toggle_hovered = TOGGLE_DIRECTED_RECT.collidepoint(pos)
+        clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
+        duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
+        draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
+        toggle_text = "Directed: ON" if directed else "Directed: OFF"
+        draw_button(screen, TOGGLE_DIRECTED_RECT, toggle_text, toggle_hovered)
+        draw_button(screen, SAVE_BUTTON_RECT, "Save", save_hovered)
+        draw_button(screen, LOAD_BUTTON_RECT, "Load", load_hovered)
+        draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
+        draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
+
     while True:
         screen.fill(BACKGROUND_COLOR)
         pos = pygame.mouse.get_pos()  # Needed outside event loop
@@ -234,8 +257,7 @@ def main():
         for e in edges:
             e.highlight = (e == hovered_edge)
 
-        save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)
-        load_hovered = LOAD_BUTTON_RECT.collidepoint(pos)
+
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -308,10 +330,9 @@ def main():
                     diagnostics.mark_dirty()
                     continue
                 elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
-                    for _ in range(duplicate_count):
-                        if duplicate_graph(vertices, edges, offset_step=(100, 0)):
-                            mark_all_problems_dirty(np_problems)
-                            diagnostics.mark_dirty()
+                    if duplicate_graph(vertices, edges, offset_step=(100, 0), times=duplicate_count):
+                        mark_all_problems_dirty(np_problems)
+                        diagnostics.mark_dirty()
                     continue
 
 
@@ -388,7 +409,6 @@ def main():
                     continue
 
                 if is_double_click():
-                    # Double-click = edit
                     if clicked_vertex:
                         input_mode = 'vertex'
                         input_target = clicked_vertex
@@ -433,14 +453,7 @@ def main():
                         dist = math.hypot(pos[0] - mouse_down_pos[0], pos[1] - mouse_down_pos[1])
 
                         if held <= 200 and dist <= 5:
-                            if not hovered_vertex and not hovered_edge and not (
-                                    SAVE_BUTTON_RECT.collidepoint(pos) or
-                                    LOAD_BUTTON_RECT.collidepoint(pos) or
-                                    K_INPUT_BOX_RECT.collidepoint(pos) or
-                                    TOGGLE_DIRECTED_RECT.collidepoint(pos) or
-                                    CLEAR_BUTTON_RECT.collidepoint(pos) or
-                                    DUPLICATE_BUTTON_RECT.collidepoint(pos)
-                            ):
+                            if logic_all_buttons():
                                 if len(vertices) >= 50:
                                     print("[INFO] Vertex limit reached (50). Cannot add more.")
                                 else:
@@ -512,16 +525,7 @@ def main():
 
         for vertex in vertices:
             vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
-        toggle_text = "Directed: ON" if directed else "Directed: OFF"
-        toggle_hovered = TOGGLE_DIRECTED_RECT.collidepoint(pos)
-        draw_button(screen, TOGGLE_DIRECTED_RECT, toggle_text, toggle_hovered)
-        draw_button(screen, SAVE_BUTTON_RECT, "Save", save_hovered)
-        draw_button(screen, LOAD_BUTTON_RECT, "Load", load_hovered)
-        clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
-        draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
-        duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
-        draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
-        draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
+        draw_all_buttons()
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
         k_label = FONT.render(f"k: {input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
