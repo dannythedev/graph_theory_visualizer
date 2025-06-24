@@ -139,6 +139,30 @@ def apply_kcolor_highlight(solver, hovered, vertices):
             except Exception as e:
                 print(f"Error parsing k-color group '{group}':", e)
 
+from string import ascii_uppercase
+
+def get_next_available_vertex_name(vertices, name_iter):
+    """Returns the next available vertex name (A-Z, then A', B', ..., then A'', B'', ...)"""
+    used_names = {v.name for v in vertices}
+
+    # Step 1: Try basic iterator first (A–Z)
+    try:
+        while True:
+            name = next(name_iter)
+            if name not in used_names:
+                return name
+    except StopIteration:
+        pass
+
+    # Step 2: Fallback: iterate over A–Z with increasing apostrophe suffixes
+    suffix = "'"
+    while True:
+        for base in ascii_uppercase:
+            candidate = base + suffix
+            if candidate not in used_names:
+                return candidate
+        suffix += "'"  # Increase suffix for next round (e.g., A'', B'', ...)
+
 class ZoomManager:
     def __init__(self):
         self.scale = 1.0
@@ -277,7 +301,7 @@ def main():
                     continue
                 elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
                     for _ in range(duplicate_count):
-                        if duplicate_graph(vertices, edges, offset_step=(200, 0)):
+                        if duplicate_graph(vertices, edges, offset_step=(100, 0)):
                             mark_all_problems_dirty(np_problems)
                             diagnostics.mark_dirty()
                     continue
@@ -412,14 +436,14 @@ def main():
                                 if len(vertices) >= 50:
                                     print("[INFO] Vertex limit reached (50). Cannot add more.")
                                 else:
-                                    try:
-                                        name = next(vertex_names)
+                                    name = get_next_available_vertex_name(vertices, vertex_names)
+                                    if name:
                                         vertices.append(Vertex(pos, name))
                                         mark_all_problems_dirty(np_problems)
                                         diagnostics.mark_dirty()
+                                    else:
+                                        print("[INFO] No available vertex names.")
 
-                                    except StopIteration:
-                                        print("No more vertex names available.")
 
 
             elif event.type == pygame.MOUSEMOTION:

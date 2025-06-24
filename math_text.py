@@ -14,7 +14,7 @@ mpl.rcParams.update({
 
 _surface_cache = {}
 
-def get_math_surface(text, color=(255, 255, 255), dpi=200):
+def get_math_surface(text, color=(255, 255, 255), dpi=200, fontsize=8):
     if not text:
         return FONT.render("", True, color)
 
@@ -27,7 +27,7 @@ def get_math_surface(text, color=(255, 255, 255), dpi=200):
         ax = fig.add_axes([0, 0, 1, 1])
         ax.axis("off")
 
-        ax.text(0, 0, f"${text}$", fontsize=8, color=_mpl_color(color))
+        ax.text(0, 0, f"${text}$", fontsize=fontsize, color=_mpl_color(color))
 
         buf = io.BytesIO()
         fig.savefig(buf, format='png', dpi=dpi, transparent=True, bbox_inches='tight', pad_inches=0)

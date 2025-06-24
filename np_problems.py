@@ -1,7 +1,7 @@
 import itertools
 import threading
-
 import pygame
+from math_text import get_math_surface
 
 
 class NPProblem:
@@ -37,17 +37,20 @@ class NPProblem:
         # Column values
         title = self.name
         k_input = f"k={k}" if self.name != "HAMPATH" else ""
+
+        # In render_debug
         if found is None:
             result = "Undefined"
         elif found and members:
-            result = ", ".join(members)
+            latex_expr = r",\ ".join(members)  # NO dollar signs
+            result = get_math_surface(latex_expr, (255,255,255), fontsize=6)
         else:
             result = "None"
 
         # Fixed column x-positions
         title_x = 10
-        k_x = 180
-        result_x = 270
+        k_x = 160
+        result_x = 220
 
         # Check hover over row
         full_area = pygame.Rect(10, y, 780, 20)
@@ -57,8 +60,11 @@ class NPProblem:
         # Render and blit each column
         screen.blit(font.render(title, True, color), (title_x, y))
         screen.blit(font.render(k_input, True, color), (k_x, y))
-        screen.blit(font.render(result, True, color), (result_x, y))
-
+        #screen.blit(font.render(result, True, color), (result_x, y))
+        if isinstance(result, pygame.Surface):
+            screen.blit(result, (result_x, y))
+        else:
+            screen.blit(font.render(result, True, color), (result_x, y))
         y += 20
         return y, hovered, members
 
