@@ -51,6 +51,34 @@ def draw_button(screen, rect, text, hovered):
     label = FONT.render(text, True, BUTTON_TEXT_COLOR)
     screen.blit(label, label.get_rect(center=rect.center))
 
+def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
+    # Slimmed-down modern slider next to "Duplicate"
+    slider_rect = DUPLICATE_SLIDER_RECT
+    slider_x = slider_rect.x
+    slider_y = slider_rect.y
+    slider_w = slider_rect.width
+    slider_h = slider_rect.height
+    slider_radius = slider_h // 2
+
+    # Track
+    pygame.draw.rect(screen, (50, 50, 50), slider_rect, border_radius=slider_radius)
+
+    # Fill
+    fill_ratio = (duplicate_count - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)
+    fill_width = int(fill_ratio * slider_w)
+    pygame.draw.rect(screen, (70, 150, 120), (slider_x, slider_y, fill_width, slider_h), border_radius=slider_radius)
+
+    # Knob (centered and smaller)
+    knob_x = slider_x + fill_width
+    knob_y = slider_y + slider_h // 2
+    knob_radius = slider_radius + 2
+    pygame.draw.circle(screen, (200, 200, 200), (knob_x, knob_y), knob_radius)
+
+    # Label inside knob
+    dup_count_text = FONT.render(f"x{duplicate_count}", True, (30, 30, 30))
+    screen.blit(dup_count_text, dup_count_text.get_rect(center=(knob_x, knob_y)))
+
+
 def update_k_value_from_input(input_text):
     try:
         return max(1, int(input_text))
@@ -156,6 +184,11 @@ def main():
     click_times = []
     k_input_active = False
     k_value = 3
+    duplicate_count = 1  # From 1 (x2) to 9 (x10)
+    SLIDER_MIN = 1
+    SLIDER_MAX = 9
+    slider_dragging = False
+
     np_problems = get_all_problems(vertices, edges)
     diagnostics = GraphDiagnostics(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
@@ -225,7 +258,7 @@ def main():
                 elif event.button == 1:  # Left mouse down
                     mouse_down_time = pygame.time.get_ticks()
                     mouse_down_pos = pos
-                    if not hovered_vertex and not hovered_edge:
+                    if not hovered_vertex and not hovered_edge and not DUPLICATE_SLIDER_RECT.collidepoint(pos):
                         panning = True
                         last_mouse_pos = pos
                 elif event.button == 2 and hovered_vertex:
@@ -243,10 +276,17 @@ def main():
                     diagnostics.mark_dirty()
                     continue
                 elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
-                    if duplicate_graph(vertices, edges, offset=(200, 0)):
-                        mark_all_problems_dirty(np_problems)
-                        diagnostics.mark_dirty()
+                    for _ in range(duplicate_count):
+                        if duplicate_graph(vertices, edges, offset_step=(200, 0)):
+                            mark_all_problems_dirty(np_problems)
+                            diagnostics.mark_dirty()
                     continue
+
+
+
+                elif DUPLICATE_SLIDER_RECT.collidepoint(pos):
+                    slider_dragging = True
+
                 elif K_INPUT_BOX_RECT.collidepoint(pos):
                     k_input_active = True
                     input_text = str(k_value)
@@ -349,6 +389,7 @@ def main():
                         dragging = False
 
             elif event.type == pygame.MOUSEBUTTONUP:
+                slider_dragging = False
                 dragging = False
                 moving_vertex = None
 
@@ -368,15 +409,25 @@ def main():
                                     CLEAR_BUTTON_RECT.collidepoint(pos) or
                                     DUPLICATE_BUTTON_RECT.collidepoint(pos)
                             ):
-                                try:
-                                    name = next(vertex_names)
-                                    vertices.append(Vertex(pos, name))
-                                    mark_all_problems_dirty(np_problems)
-                                except StopIteration:
-                                    print("No more vertex names available.")
+                                if len(vertices) >= 50:
+                                    print("[INFO] Vertex limit reached (50). Cannot add more.")
+                                else:
+                                    try:
+                                        name = next(vertex_names)
+                                        vertices.append(Vertex(pos, name))
+                                        mark_all_problems_dirty(np_problems)
+                                        diagnostics.mark_dirty()
+
+                                    except StopIteration:
+                                        print("No more vertex names available.")
 
 
             elif event.type == pygame.MOUSEMOTION:
+                if slider_dragging:
+                    rel_x = min(max(pos[0] - DUPLICATE_SLIDER_RECT.x, 0), DUPLICATE_SLIDER_RECT.width)
+                    ratio = rel_x / DUPLICATE_SLIDER_RECT.width
+                    duplicate_count = int(SLIDER_MIN + (SLIDER_MAX - SLIDER_MIN) * ratio)
+
                 if moving_vertex:
                     dx = pos[0] - drag_start_pos[0]
                     dy = pos[1] - drag_start_pos[1]
@@ -434,6 +485,7 @@ def main():
         draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
         duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
         draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
+        draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
         k_label = FONT.render(f"k: {input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)

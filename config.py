@@ -33,4 +33,5 @@ LOAD_BUTTON_RECT = pygame.Rect(120, 10, 100, 36)
 K_INPUT_BOX_RECT = pygame.Rect(230, 10, 60, 36)
 TOGGLE_DIRECTED_RECT = pygame.Rect(300, 10, 120, 36)
 CLEAR_BUTTON_RECT = pygame.Rect(690, 10, 100, 36)
-DUPLICATE_BUTTON_RECT = pygame.Rect(440, 10, 140, 36)
+DUPLICATE_BUTTON_RECT = pygame.Rect(440, 10, 140, 18)
+DUPLICATE_SLIDER_RECT = pygame.Rect(440, 33, 140, 12)  # Adjusted height and aligned with button

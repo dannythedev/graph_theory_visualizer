@@ -1,5 +1,8 @@
 from math_text import get_math_surface
-
+import pygame
+import re
+import math
+from config import *
 
 class Vertex:
     def __init__(self, pos, name):
@@ -25,8 +28,7 @@ class Vertex:
         dy = self.pos[1] - pos[1]
         return dx * dx + dy * dy <= VERTEX_RADIUS ** 2
 
-import math
-from config import *
+
 
 class Edge:
     def __init__(self, start, end, value=None):
@@ -101,29 +103,90 @@ def edge_exists(v1, v2, edge_lookup):
 def rebuild_edge_lookup(edges):
     return set((min(e.start.name, e.end.name), max(e.start.name, e.end.name)) for e in edges)
 
-def duplicate_graph(vertices, edges, offset=(200, 0)):
-    """Duplicates the current graph and offsets it to the right. Names become A', B', etc."""
+def get_base_and_index(name):
+    match = re.match(r"^(.*?)(?:_(\d+))?$", name)
+    if match:
+        base = match.group(1)
+        index = int(match.group(2)) if match.group(2) else 1
+        return base, index
+    return name, 1
+
+def is_clear_position(vertices, new_positions, min_dist=2 * VERTEX_RADIUS + 5):
+    """Check if new positions avoid overlaps with any existing vertex."""
+    for nx, ny in new_positions:
+        for v in vertices:
+            dx, dy = nx - v.pos[0], ny - v.pos[1]
+            if dx * dx + dy * dy < min_dist * min_dist:
+                return False
+    return True
+
+def is_within_screen(positions, screen_rect):
+    """Returns True if all positions fall within screen bounds."""
+    for x, y in positions:
+        if not screen_rect.collidepoint(x, y):
+            return False
+    return True
+
+def duplicate_graph(vertices, edges, offset_step=(200, 0), max_attempts=5):
+    """
+    Tries to duplicate graph to the right, then down, based on screen space.
+    Falls back to offscreen duplication only if needed.
+    """
+    # Get current screen size
+
+    screen_rect = pygame.display.get_surface().get_rect()
+
     name_map = {}
     existing_names = {v.name for v in vertices}
     new_vertices = []
 
+    # Prepare potential offsets: right first, then down
+    offset_directions = [
+        (offset_step[0], 0),  # right
+        (0, offset_step[0]),  # down
+        (offset_step[0], offset_step[0])  # fallback: diagonal
+    ]
+
+    for dx, dy in offset_directions:
+        candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in vertices]
+        if is_clear_position(vertices, candidate_positions) and is_within_screen(candidate_positions, screen_rect):
+            chosen_offset = (dx, dy)
+            break
+    else:
+        # If nothing fits onscreen and clean, just shift right far
+        chosen_offset = (offset_step[0] * (max_attempts + 2), 0)
+
+    dx, dy = chosen_offset
+
     for v in vertices:
-        new_name = f"{v.name}'"
-        # Ensure uniqueness in case user already used names like A'
-        while new_name in existing_names:
-            new_name += "'"
+        base, _ = get_base_and_index(v.name)
+
+        used_suffixes = {
+            get_base_and_index(name)[1]
+            for name in existing_names
+            if get_base_and_index(name)[0] == base
+        }
+
+        new_index = 2
+        while new_index in used_suffixes:
+            new_index += 1
+
+        new_name = f"{base}_{new_index}"
         existing_names.add(new_name)
 
-        new_pos = [v.pos[0] + offset[0], v.pos[1] + offset[1]]
+        new_pos = [v.pos[0] + dx, v.pos[1] + dy]
         dup = Vertex(new_pos, new_name)
         name_map[v.name] = dup
         new_vertices.append(dup)
+
+    if len(vertices) + len(new_vertices) > 50:
+        print("[INFO] Duplication would exceed 50 vertex limit. Aborting.")
+        return False
 
     vertices.extend(new_vertices)
 
     for e in edges:
         if e.start.name in name_map and e.end.name in name_map:
-            new_edge = Edge(name_map[e.start.name], name_map[e.end.name], e.value)
-            edges.append(new_edge)
+            edges.append(Edge(name_map[e.start.name], name_map[e.end.name], e.value))
 
     return True
