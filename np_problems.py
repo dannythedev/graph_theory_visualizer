@@ -34,16 +34,21 @@ class NPProblem:
         self.update(k, directed)
         found, members = self.result
 
+        # Check hover over row
+        full_area = pygame.Rect(10, y, 780, 20)
+        hovered = full_area.collidepoint(mouse_pos)
+        color = (255, 255, 100) if hovered else (200, 200, 200)
+
         # Column values
         title = self.name
         k_input = f"k={k}" if self.name != "HAMPATH" else ""
 
-        # In render_debug
+        # Render result
         if found is None:
             result = "Undefined"
         elif found and members:
-            latex_expr = r",\ ".join(members)  # NO dollar signs
-            result = get_math_surface(latex_expr, (255,255,255), fontsize=6)
+            latex_expr = r",\ ".join(members)
+            result = get_math_surface(latex_expr, color, fontsize=6)
         else:
             result = "None"
 
@@ -52,19 +57,14 @@ class NPProblem:
         k_x = 160
         result_x = 220
 
-        # Check hover over row
-        full_area = pygame.Rect(10, y, 780, 20)
-        hovered = full_area.collidepoint(mouse_pos)
-        color = (255, 255, 100) if hovered else (200, 200, 200)
-
         # Render and blit each column
         screen.blit(font.render(title, True, color), (title_x, y))
         screen.blit(font.render(k_input, True, color), (k_x, y))
-        #screen.blit(font.render(result, True, color), (result_x, y))
         if isinstance(result, pygame.Surface):
             screen.blit(result, (result_x, y))
         else:
             screen.blit(font.render(result, True, color), (result_x, y))
+
         y += 20
         return y, hovered, members
 

@@ -18,7 +18,8 @@ def get_math_surface(text, color=(255, 255, 255), dpi=200, fontsize=8):
     if not text:
         return FONT.render("", True, color)
 
-    key = (text, color)
+    key = (text, color, fontsize)
+
     if key in _surface_cache:
         return _surface_cache[key]
 

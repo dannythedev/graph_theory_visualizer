@@ -52,7 +52,6 @@ def draw_button(screen, rect, text, hovered):
     screen.blit(label, label.get_rect(center=rect.center))
 
 def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
-    # Slimmed-down modern slider next to "Duplicate"
     slider_rect = DUPLICATE_SLIDER_RECT
     slider_x = slider_rect.x
     slider_y = slider_rect.y
@@ -68,11 +67,19 @@ def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
     fill_width = int(fill_ratio * slider_w)
     pygame.draw.rect(screen, (70, 150, 120), (slider_x, slider_y, fill_width, slider_h), border_radius=slider_radius)
 
-    # Knob (centered and smaller)
+    # Knob position
     knob_x = slider_x + fill_width
     knob_y = slider_y + slider_h // 2
     knob_radius = slider_radius + 2
-    pygame.draw.circle(screen, (200, 200, 200), (knob_x, knob_y), knob_radius)
+    knob_rect = pygame.Rect(knob_x - knob_radius, knob_y - knob_radius, knob_radius * 2, knob_radius * 2)
+
+    # Detect hover
+    mouse_pos = pygame.mouse.get_pos()
+    is_hovered = knob_rect.collidepoint(mouse_pos)
+    knob_color = (240, 240, 180) if is_hovered else (200, 200, 200)
+
+    # Knob
+    pygame.draw.circle(screen, knob_color, (knob_x, knob_y), knob_radius)
 
     # Label inside knob
     dup_count_text = FONT.render(f"x{duplicate_count}", True, (30, 30, 30))
@@ -290,6 +297,7 @@ def main():
                     drag_start_pos = pos
                     dragging = False
                     scroll_drag_strength = 0.25  # Much stronger nudge
+                    continue
 
                 if SAVE_BUTTON_RECT.collidepoint(pos):
                     save_graph(vertices, edges)
@@ -463,7 +471,11 @@ def main():
                         physics.velocities[moving_vertex] = [0.0, 0.0]  # Freeze physics interference
                         is_middle = pygame.mouse.get_pressed()[1]  # True if scroll button held
                         strength = scroll_drag_strength if is_middle else 0.02
-                        physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos, strength=strength)
+                        if is_middle:
+                            physics.move_component(moving_vertex, moving_vertex.pos, old_pos)
+                        else:
+                            physics.nudge_neighbors(moving_vertex, moving_vertex.pos, old_pos, strength=strength)
+
                 else:
                     if panning and last_mouse_pos:
                         dx = pos[0] - last_mouse_pos[0]

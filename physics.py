@@ -7,6 +7,19 @@ class PhysicsSystem:
     def rebuild(self):
         self.velocities = {v: [0.0, 0.0] for v in self.vertices}
 
+    def move_component(self, anchor_vertex, new_pos, old_pos, strength=0.25):
+        dx = new_pos[0] - old_pos[0]
+        dy = new_pos[1] - old_pos[1]
+        if dx == 0 and dy == 0:
+            return
+
+        connected_vertices = self.get_connected_component(anchor_vertex)
+        for v in connected_vertices:
+            if v not in self.velocities:
+                self.velocities[v] = [0.0, 0.0]
+            self.velocities[v][0] += dx * strength
+            self.velocities[v][1] += dy * strength
+
     def get_connected(self, vertex):
         connected = set()
         for e in self.edges:
@@ -15,6 +28,20 @@ class PhysicsSystem:
             elif e.end == vertex:
                 connected.add(e.start)
         return connected
+
+    def get_connected_component(self, start_vertex):
+        visited = set()
+
+        def dfs(v):
+            visited.add(v)
+            for e in self.edges:
+                if e.start == v and e.end not in visited:
+                    dfs(e.end)
+                elif e.end == v and e.start not in visited:
+                    dfs(e.start)
+
+        dfs(start_vertex)
+        return visited
 
     def nudge_neighbors(self, moved_vertex, new_pos, old_pos, strength=0.02):
         dx = new_pos[0] - old_pos[0]
