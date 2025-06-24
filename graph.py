@@ -1,3 +1,6 @@
+from math_text import get_math_surface
+
+
 class Vertex:
     def __init__(self, pos, name):
         self.pos = list(pos)
@@ -12,7 +15,9 @@ class Vertex:
 
         pygame.draw.circle(screen, VERTEX_OUTLINE_COLOR, self.pos, VERTEX_RADIUS + 2)
         pygame.draw.circle(screen, color, self.pos, VERTEX_RADIUS)
-        label = FONT.render(self.name, True, (255, 255, 255))
+        # label = FONT.render(self.name, True, (255, 255, 255))
+        # screen.blit(label, label.get_rect(center=self.pos))
+        label = get_math_surface(self.name)
         screen.blit(label, label.get_rect(center=self.pos))
 
     def is_clicked(self, pos):
@@ -49,7 +54,9 @@ class Edge:
 
         if self.value:
             mid = ((x1 + x2) // 2, (y1 + y2) // 2)
-            label = FONT.render(str(self.value), True, color)
+            # label = FONT.render(str(self.value), True, color)
+            # screen.blit(label, label.get_rect(center=mid))
+            label = get_math_surface(str(self.value), color)
             screen.blit(label, label.get_rect(center=mid))
 
         if directed:

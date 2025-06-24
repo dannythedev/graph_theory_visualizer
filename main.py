@@ -304,17 +304,7 @@ def main():
                     return len(click_times) == 2 and (click_times[1] - click_times[0]) < DOUBLE_CLICK_TIME
 
                 if event.button == 3:
-                    if clicked_vertex:
-                        input_mode = 'vertex'
-                        input_target = clicked_vertex
-                        input_text = clicked_vertex.name
-                    elif clicked_edge:
-                        input_mode = 'edge'
-                        input_target = clicked_edge
-                        input_text = clicked_edge.value or ""
-                    continue
-
-                if is_double_click():
+                    # Right click = delete
                     if clicked_vertex:
                         edges[:] = [e for e in edges if e.start != clicked_vertex and e.end != clicked_vertex]
                         vertices.remove(clicked_vertex)
@@ -323,7 +313,18 @@ def main():
                         edges.remove(clicked_edge)
                     mark_all_problems_dirty(np_problems)
                     diagnostics.mark_dirty()
+                    continue
 
+                if is_double_click():
+                    # Double-click = edit
+                    if clicked_vertex:
+                        input_mode = 'vertex'
+                        input_target = clicked_vertex
+                        input_text = clicked_vertex.name
+                    elif clicked_edge:
+                        input_mode = 'edge'
+                        input_target = clicked_edge
+                        input_text = clicked_edge.value or ""
                     continue
 
                 if clicked_vertex:
