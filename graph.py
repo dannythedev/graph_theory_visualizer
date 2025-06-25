@@ -1,14 +1,14 @@
 from math_text import get_math_surface
-import pygame
 import re
 import math
 from config import *
 
 class Vertex:
-    def __init__(self, pos, name):
+    def __init__(self, pos, name, custom_color=None):
         self.pos = list(pos)
         self.name = name
         self.highlight = False
+        self.custom_color = custom_color
 
     def draw(self, screen, selected=False, hovered=False):
         if self.custom_color:
@@ -55,16 +55,32 @@ class Edge:
         pygame.draw.line(screen, color, (x1, y1), (x2, y2), 2)
 
         if self.value:
-            mid = ((x1 + x2) // 2, (y1 + y2) // 2)
-            # label = FONT.render(str(self.value), True, color)
-            # screen.blit(label, label.get_rect(center=mid))
+            # Midpoint of the edge
+            mid_x = (x1 + x2) / 2
+            mid_y = (y1 + y2) / 2
+
+            # Compute perpendicular offset (normal vector)
+            normal_len = 12  # pixels away from the line
+            nx = -dy
+            ny = dx
+            length = math.hypot(nx, ny)
+            if length != 0:
+                nx /= length
+                ny /= length
+
+            # Apply the perpendicular offset
+            label_offset_x = mid_x + nx * normal_len
+            label_offset_y = mid_y + ny * normal_len
+
             label = get_math_surface(str(self.value), color)
-            screen.blit(label, label.get_rect(center=mid))
+            rect = label.get_rect(center=(label_offset_x, label_offset_y))
+            screen.blit(label, rect)
 
         if directed:
             self._draw_arrowhead(screen, x1, y1, x2, y2, color)
 
-    def _draw_arrowhead(self, screen, x1, y1, x2, y2, color):
+    @staticmethod
+    def _draw_arrowhead(screen, x1, y1, x2, y2, color):
         angle = math.atan2(y2 - y1, x2 - x1)
         offset = VERTEX_RADIUS + 4  # Pull arrow back from center
         tip_x = x2 - offset * math.cos(angle)
@@ -94,8 +110,48 @@ class Edge:
 def get_vertex_at_pos(vertices, pos):
     return next((v for v in vertices if v.is_clicked(pos)), None)
 
+def get_edges_at_pos_original(edges, pos):
+    return [e for e in edges if e.is_clicked(pos)]
+
 def get_edge_at_pos(edges, pos):
-    return next((e for e in edges if e.is_clicked(pos)), None)
+    closest_edge = None
+    closest_dist_sq = float('inf')
+
+    for e in edges:
+        # Determine if this edge has an opposite
+        is_opposite = any(e2.start == e.end and e2.end == e.start for e2 in edges if e2 != e)
+        offset_angle = math.pi / 18 if is_opposite else 0
+
+        # Compute offset positions to match how it's drawn
+        x1, y1 = e.start.pos
+        x2, y2 = e.end.pos
+        dx, dy = x2 - x1, y2 - y1
+        angle = math.atan2(dy, dx)
+
+        if offset_angle != 0:
+            offset = 5
+            x1 += -offset * math.sin(angle + offset_angle)
+            y1 += offset * math.cos(angle + offset_angle)
+            x2 += -offset * math.sin(angle + offset_angle)
+            y2 += offset * math.cos(angle + offset_angle)
+
+        # Same logic for finding the closest point
+        px, py = pos
+        dx, dy = x2 - x1, y2 - y1
+        if dx == dy == 0:
+            continue
+        t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+        t = max(0, min(1, t))  # Clamp t to [0, 1]
+        closest = (x1 + t * dx, y1 + t * dy)
+        dist_sq = (closest[0] - px) ** 2 + (closest[1] - py) ** 2
+
+        if dist_sq <= EDGE_CLICK_RADIUS ** 2 and dist_sq < closest_dist_sq:
+            closest_edge = e
+            closest_dist_sq = dist_sq
+
+    return closest_edge
+
+
 
 def edge_exists(v1, v2, edge_lookup):
     return (min(v1.name, v2.name), max(v1.name, v2.name)) in edge_lookup
@@ -127,68 +183,92 @@ def is_within_screen(positions, screen_rect):
             return False
     return True
 
-def duplicate_graph(og_vertices, og_edges, offset_step=(200, 0), max_attempts=5, times=1):
+def is_within_screen_margin(positions, rect, margin_x, margin_y):
+    for x, y in positions:
+        if x < -margin_x or x > rect.width + margin_x:
+            return False
+        if y < -margin_y or y > rect.height + margin_y:
+            return False
+    return True
+
+
+
+
+def duplicate_graph(og_vertices, og_edges, spacing=(50, 50), times=1):
     """
-    Duplicates the original graph `times` number of times.
-    Each copy is offset by `offset_step` * i.
+    Duplicates the original graph `times` times by laying out copies in a grid of cells
+    determined by the graph's bounding box and the given spacing.
+    - spacing: (horizontal_spacing, vertical_spacing) between cells.
     """
     screen_rect = pygame.display.get_surface().get_rect()
 
-    # Track all added elements
+    # Compute bounding box of the original graph
+    xs = [v.pos[0] for v in og_vertices]
+    ys = [v.pos[1] for v in og_vertices]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    graph_w = max_x - min_x
+    graph_h = max_y - min_y
+    cell_w = graph_w + spacing[0]
+    cell_h = graph_h + spacing[1]
+
+    # Determine how many columns fit on screen
+    max_cols = max(1, screen_rect.width // cell_w)
+
     all_new_vertices = []
     all_new_edges = []
     existing_names = {v.name for v in og_vertices}
-    base_vertices = og_vertices
-    base_edges = og_edges
+    base_vertices = list(og_vertices)
+    base_edges = list(og_edges)
 
     for i in range(times):
-        dx = offset_step[0] * (i + 1)
-        dy = offset_step[1] * (i + 1)
 
+        # Enforce maximum vertex count
+        if len(og_vertices) + len(all_new_vertices) > VERTEX_LIMIT:
+            print(f"[INFO] Duplication would exceed {VERTEX_LIMIT} vertex limit. Aborting further duplicates.")
+            break
+        # Calculate grid cell for this duplicate (skip cell 0,0 reserved for original)
+        col = (i + 1) % max_cols
+        row = (i + 1) // max_cols
+        dx = cell_w * col
+        dy = cell_h * row
+
+        # Proposed positions for the new copy
         candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in base_vertices]
 
-        if not is_clear_position(og_vertices + all_new_vertices, candidate_positions) or \
-           not is_within_screen(candidate_positions, screen_rect):
-            print(f"[INFO] Skipping duplication #{i+1} — space invalid.")
+        # Skip if it would overlap or be too far off-screen
+        if not (is_clear_position(og_vertices + all_new_vertices, candidate_positions)
+                and is_within_screen_margin(candidate_positions, screen_rect, spacing[0], spacing[1])):
+            print(f"[INFO] Skipping duplication #{i+1} — cell ({col},{row}) not available.")
             continue
 
+        # Create duplicated vertices with new unique names
         name_map = {}
         new_vertices = []
-
         for v in base_vertices:
             base, _ = get_base_and_index(v.name)
-
-            used_suffixes = {
-                get_base_and_index(name)[1]
-                for name in existing_names
-                if get_base_and_index(name)[0] == base
-            }
-
+            used_suffixes = {get_base_and_index(n)[1] for n in existing_names if get_base_and_index(n)[0] == base}
             new_index = 2
             while new_index in used_suffixes:
                 new_index += 1
-
             new_name = f"{base}_{new_index}"
             existing_names.add(new_name)
-
             new_pos = [v.pos[0] + dx, v.pos[1] + dy]
             dup = Vertex(new_pos, new_name)
             name_map[v.name] = dup
             new_vertices.append(dup)
 
+        # Create duplicated edges between the new vertices
         new_edges = [
             Edge(name_map[e.start.name], name_map[e.end.name], e.value)
-            for e in base_edges if e.start.name in name_map and e.end.name in name_map
+            for e in base_edges
         ]
-
-        if len(og_vertices) + len(all_new_vertices) + len(new_vertices) > 50:
-            print("[INFO] Duplication would exceed 50 vertex limit. Aborting.")
-            return False
 
         all_new_vertices.extend(new_vertices)
         all_new_edges.extend(new_edges)
 
-    # Extend the actual lists once
+
+    # Append all the new copies to the original lists
     og_vertices.extend(all_new_vertices)
     og_edges.extend(all_new_edges)
     return True

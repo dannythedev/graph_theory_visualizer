@@ -9,21 +9,24 @@ from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_gr
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
 
-def save_graph(vertices, edges, filename="graph.json"):
+def save_graph(vertices, edges, directed=False, filename="graph.json"):
     with open(filename, "w") as f:
         json.dump({
+            "directed": directed,
             "vertices": [{"name": v.name, "pos": v.pos} for v in vertices],
             "edges": [{"start": e.start.name, "end": e.end.name, "value": e.value} for e in edges]
         }, f)
+
 
 def load_graph(filename, vertices, edges):
     try:
         with open(filename, "r") as f:
             data = json.load(f)
 
-        # Validate presence of required fields
         if "vertices" not in data or "edges" not in data:
             raise ValueError("Invalid file format: missing 'vertices' or 'edges'.")
+
+        directed = data.get("directed", False)  # default to False for backward compatibility
 
         name_map = {
             v["name"]: Vertex(v["pos"], v["name"])
@@ -38,12 +41,11 @@ def load_graph(filename, vertices, edges):
             for e in data["edges"]
         )
 
-        # Return iterator of unused names
-        return iter(name for name in string.ascii_uppercase if name not in name_map)
+        return iter(name for name in string.ascii_uppercase if name not in name_map), directed
 
     except Exception as e:
         print(f"[ERROR] Failed to load graph from '{filename}': {e}")
-        return iter(string.ascii_uppercase)  # Fallback: fresh name iterator
+        return iter(string.ascii_uppercase), False
 
 
 def draw_button(screen, rect, text, hovered):
@@ -65,12 +67,12 @@ def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
     # Fill
     fill_ratio = (duplicate_count - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)
     fill_width = int(fill_ratio * slider_w)
-    pygame.draw.rect(screen, (70, 150, 120), (slider_x, slider_y, fill_width, slider_h), border_radius=slider_radius)
+    pygame.draw.rect(screen, (180, 180, 180), (slider_x, slider_y, fill_width, slider_h), border_radius=slider_radius)
 
     # Knob position
     knob_x = slider_x + fill_width
     knob_y = slider_y + slider_h // 2
-    knob_radius = slider_radius + 2
+    knob_radius = slider_radius + 4
     knob_rect = pygame.Rect(knob_x - knob_radius, knob_y - knob_radius, knob_radius * 2, knob_radius * 2)
 
     # Detect hover
@@ -95,7 +97,7 @@ def update_k_value_from_input(input_text):
 def draw_fps(screen, clock):
     fps = int(clock.get_fps())
     text = DEBUG_FONT.render(f"{fps} FPS", True, (150, 255, 150))
-    screen.blit(text, text.get_rect(bottomright=(790, 590)))
+    screen.blit(text, text.get_rect(bottomright=(screen.get_width()-20, screen.get_height()-5)))
 
 import colorsys
 
@@ -196,8 +198,7 @@ def main():
 
     directed = False  # start with undirected mode
 
-
-    screen = pygame.display.set_mode((800, 600))
+    screen = pygame.display.set_mode((800, 600), pygame.RESIZABLE)
     pygame.display.set_caption("Graph Theory Drawer")
     clock = pygame.time.Clock()
     zoom = ZoomManager()
@@ -263,6 +264,10 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit(); sys.exit()
 
+            elif event.type == pygame.VIDEORESIZE:
+                screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+
+
             elif event.type == pygame.KEYDOWN:
                 if k_input_active:
                     if event.key == pygame.K_RETURN:
@@ -322,15 +327,17 @@ def main():
                     continue
 
                 if SAVE_BUTTON_RECT.collidepoint(pos):
-                    save_graph(vertices, edges)
+                    save_graph(vertices, edges, directed)
                     continue
                 elif LOAD_BUTTON_RECT.collidepoint(pos):
-                    vertex_names = load_graph("graph.json", vertices, edges)
+                    vertex_names, loaded_directed = load_graph("graph.json", vertices, edges)
+                    directed = loaded_directed  # Update current mode
                     mark_all_problems_dirty(np_problems)
                     diagnostics.mark_dirty()
                     continue
+
                 elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
-                    if duplicate_graph(vertices, edges, offset_step=(100, 0), times=duplicate_count):
+                    if duplicate_graph(vertices, edges, times=duplicate_count):
                         mark_all_problems_dirty(np_problems)
                         diagnostics.mark_dirty()
                     continue
@@ -454,16 +461,21 @@ def main():
 
                         if held <= 200 and dist <= 5:
                             if logic_all_buttons():
-                                if len(vertices) >= 50:
-                                    print("[INFO] Vertex limit reached (50). Cannot add more.")
+                                if len(vertices) >= VERTEX_LIMIT:
+                                    print(f"[INFO] Vertex limit reached ({VERTEX_LIMIT}). Cannot add more.")
                                 else:
                                     name = get_next_available_vertex_name(vertices, vertex_names)
                                     if name:
-                                        vertices.append(Vertex(pos, name))
+                                        new_vertex = Vertex(pos, name)
+                                        vertices.append(new_vertex)
+
+                                        if selected_vertex:
+                                            edges.append(Edge(selected_vertex, new_vertex))
+                                            selected_vertex = None  # optionally clear selection
+
                                         mark_all_problems_dirty(np_problems)
                                         diagnostics.mark_dirty()
-                                    else:
-                                        print("[INFO] No available vertex names.")
+
 
 
 
@@ -528,21 +540,22 @@ def main():
         draw_all_buttons()
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
-        k_label = FONT.render(f"k: {input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
-        screen.blit(k_label, (K_INPUT_BOX_RECT.x + 10, K_INPUT_BOX_RECT.y + 12))
+        k_label = FONT.render(f"k={input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
+        label_rect = k_label.get_rect(center=K_INPUT_BOX_RECT.center)
+        screen.blit(k_label, label_rect)
 
         if input_mode:
             pygame.draw.rect(screen, INPUT_BOX_COLOR, (10, 550, 780, 40), border_radius=6)
             label = "Editing Vertex Name:" if input_mode == 'vertex' else "Editing Edge Value:"
             prompt = INPUT_FONT.render(f"{label} {input_text}", True, INPUT_TEXT_COLOR)
-            screen.blit(prompt, (20, 558))
+            screen.blit(prompt, (20, 563))
 
         draw_fps(screen, clock)
 
         physics.update()
         if not input_mode:
             diagnostics.update(directed=directed)
-            diagnostics.render(screen, DEBUG_FONT, y_start=550, mouse_pos=pos)
+            diagnostics.render(screen, DEBUG_FONT)
 
         pygame.display.flip()
         clock.tick(60)

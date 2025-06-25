@@ -30,6 +30,7 @@ class NPProblem:
             self._thread = threading.Thread(target=self._run_compute_thread, args=(k, directed))
             self._thread.start()
 
+
     def render_debug(self, screen, font, k, y, mouse_pos, directed):
         self.update(k, directed)
         found, members = self.result

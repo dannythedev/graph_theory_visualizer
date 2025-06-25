@@ -126,11 +126,12 @@ class GraphDiagnostics:
     def mark_dirty(self):
         self.needs_update = True
 
-    def render(self, screen, font, y_start, mouse_pos):
+    def render(self, screen, font):
+        y_start = screen.get_height()-50
         lines = [
-            f"  Cyclic: {self.info['Cyclic']}",
-            f"  Strongly Connected Components: {self.info['Strongly Connected Components']}",
-            f"  Components: {self.info['Components']}"
+            f"Cyclic: {self.info['Cyclic']}",
+            f"Strongly Connected: {self.info['Strongly Connected Components']}",
+            f"Components: {self.info['Components']}"
         ]
 
         for line in lines:

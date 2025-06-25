@@ -1,3 +1,5 @@
+import re
+
 import pygame
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -14,7 +16,14 @@ mpl.rcParams.update({
 
 _surface_cache = {}
 
+def wrap_trailing_index(name):
+    return re.sub(r'_(\d+)$', r'_{\1}', name)
+
+def unwrap_trailing_index(name):
+    return re.sub(r'_\{(\d+)\}$', r'_\1', name)
+
 def get_math_surface(text, color=(255, 255, 255), dpi=200, fontsize=8):
+    text = wrap_trailing_index(text)
     if not text:
         return FONT.render("", True, color)
 
