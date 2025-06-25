@@ -27,10 +27,10 @@ An intuitive, interactive tool for building, analyzing, and visualizing graphs a
 | ➕ Add Vertex | Left-click on empty space |
 | 🔗 Connect Vertices | Left-click two vertices |
 | ✏️ Edit Label | Double-click on a vertex or edge |
-| 🗑 Delete | Right-click a vertex or edge |
+| ✖️️ Delete | Right-click a vertex or edge |
 | 🧲 Move Vertex | Drag with mouse |
 | 🎯 Toggle Directed Mode | Click "Directed: ON/OFF" |
-| 🎚 Change `k` | Click `k=` box and type |
+| 📈 Change `k` | Click `k=` box and type |
 | 💾 Save / Load / Clear | Use on-screen buttons |
 | 🔍 Zoom | Scroll mouse wheel |
 | 📦 Duplicate Graph | Use Duplicate button + slider |
