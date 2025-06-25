@@ -272,3 +272,26 @@ def duplicate_graph(og_vertices, og_edges, spacing=(50, 50), times=1):
     og_vertices.extend(all_new_vertices)
     og_edges.extend(all_new_edges)
     return True
+
+
+def apply_graph_complement(vertices, edges, directed=False):
+    """Replace edges with their complement."""
+    name_to_vertex = {v.name: v for v in vertices}
+    all_pairs = {
+        (a.name, b.name)
+        for i, a in enumerate(vertices)
+        for j, b in enumerate(vertices)
+        if i != j and (directed or a.name < b.name)
+    }
+
+    existing = {(e.start.name, e.end.name) for e in edges}
+    if not directed:
+        existing |= {(e.end.name, e.start.name) for e in edges}
+
+    new_edges = [
+        Edge(name_to_vertex[a], name_to_vertex[b])
+        for a, b in all_pairs
+        if (a, b) not in existing
+    ]
+
+    edges[:] = new_edges

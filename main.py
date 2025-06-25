@@ -2,7 +2,7 @@ import math
 import sys
 import string
 import json
-
+from graph import apply_graph_complement
 from diagnostics import GraphDiagnostics
 from config import *
 from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph
@@ -285,13 +285,15 @@ def main():
                 K_INPUT_BOX_RECT.collidepoint(pos) or
                 TOGGLE_DIRECTED_RECT.collidepoint(pos) or
                 CLEAR_BUTTON_RECT.collidepoint(pos) or
-                DUPLICATE_BUTTON_RECT.collidepoint(pos))
+                DUPLICATE_BUTTON_RECT.collidepoint(pos) or
+                COMPLEMENT_BUTTON_RECT.collidepoint(pos))
 
     def draw_all_buttons():
         save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)
         load_hovered = LOAD_BUTTON_RECT.collidepoint(pos)
         toggle_hovered = TOGGLE_DIRECTED_RECT.collidepoint(pos)
         clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
+        complement_hovered = COMPLEMENT_BUTTON_RECT.collidepoint(pos)
         duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
         draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
         toggle_text = "Directed: ON" if directed else "Directed: OFF"
@@ -300,6 +302,7 @@ def main():
         draw_button(screen, LOAD_BUTTON_RECT, "Load", load_hovered)
         draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
         draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
+        draw_button(screen, COMPLEMENT_BUTTON_RECT, "Complement", complement_hovered)
 
     while True:
         screen.fill(BACKGROUND_COLOR)
@@ -377,6 +380,8 @@ def main():
                     if not hovered_vertex and not hovered_edge and not DUPLICATE_SLIDER_RECT.collidepoint(pos):
                         panning = True
                         last_mouse_pos = pos
+
+
                 elif event.button == 2 and hovered_vertex:
                     moving_vertex = hovered_vertex
                     drag_start_pos = pos
@@ -400,7 +405,11 @@ def main():
                         diagnostics.mark_dirty()
                     continue
 
-
+                elif COMPLEMENT_BUTTON_RECT.collidepoint(pos):
+                    apply_graph_complement(vertices, edges, directed)
+                    mark_all_problems_dirty(np_problems)
+                    diagnostics.mark_dirty()
+                    continue
 
                 elif DUPLICATE_SLIDER_RECT.collidepoint(pos):
                     slider_dragging = True
