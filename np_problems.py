@@ -12,15 +12,25 @@ class NPProblem:
         self.edges = edges
         self.k = None
         self.result = (None, [])  # None = still computing
+        self.edge_members = []  # store solver-returned edges
         self.needs_update = True
+
         self._thread = None
 
     def compute(self, k, directed):  # Override in subclasses
         return False, []
 
     def _run_compute_thread(self, k, directed):
-        result = self.compute(k, directed)
-        self.result = result
+        out = self.compute(k, directed)
+        # unpack either (found, verts) or (found, verts, eds)
+        if len(out) == 3:
+            found, verts, eds = out
+            self.result = (found, verts)
+            self.edge_members = eds
+        else:
+            found, verts = out
+            self.result = (found, verts)
+            self.edge_members = []
         self.needs_update = False
 
     def update(self, k, directed=False):
@@ -171,9 +181,11 @@ class HamiltonianPathSolver(NPProblem):
         for start in range(n):
             path = dp(start, 1 << start)
             if path and len(path) == n:
-                return True, [name_map[i] for i in path]
+                vert_names = [name_map[i] for i in path]
+                eds = [(vert_names[i], vert_names[i + 1]) for i in range(len(vert_names) - 1)]
+                return True, vert_names, eds
+        return False, [], []
 
-        return False, []
 
 class KColoringSolver(NPProblem):
     def __init__(self, v, e):
@@ -269,9 +281,11 @@ class HamiltonianCycleSolver(NPProblem):
                     visited |= 1 << curr
                     path.append(curr)
                 path.append(start)  # close the cycle
-                return True, [name_map[i] for i in path]
+                vert_names = [name_map[i] for i in path]
+                eds = [(vert_names[i], vert_names[i + 1]) for i in range(len(vert_names) - 1)]
+                return True, vert_names, eds
+        return False, [], []
 
-        return False, []
 
 class MinCutSolver(NPProblem):
     def __init__(self, v, e):
@@ -337,7 +351,11 @@ class LongestPathSolver(NPProblem):
         for v in self.vertices:
             dfs([v.name], {v.name})
 
-        return (len(longest) > 1), longest
+        found = len(longest) > 1
+        if found:
+            eds = [(longest[i], longest[i + 1]) for i in range(len(longest) - 1)]
+            return True, longest, eds
+        return False, [], []
 
 
 def get_all_problems(vertices, edges):

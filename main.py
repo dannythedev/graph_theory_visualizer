@@ -193,6 +193,57 @@ class ZoomManager:
 
         self.scale = new_scale
 
+def apply_highlights(elements, vertices, edges):
+    for v in vertices:
+        v.highlight = False
+    for e in edges:
+        e.highlight = False
+
+    if not elements:
+        return
+
+    if all(isinstance(e, tuple) and len(e) == 2 for e in elements):  # edge list
+        # Normalize element pairs to sorted names
+        edge_set = set((min(str(a), str(b)), max(str(a), str(b))) for a, b in elements)
+
+        for edge in edges:
+            a, b = edge.start.name, edge.end.name
+            edge_key = (min(a, b), max(a, b))
+            if edge_key in edge_set:
+                edge.highlight = True
+
+    else:  # vertex list
+        name_set = set(map(str, elements))  # Ensure string comparison
+        for v in vertices:
+            v.highlight = v.name in name_set
+
+def apply_bipartite_highlight(np_problems, vertices, directed):
+    for solver in np_problems:
+        if solver.name == "k-COLORING":
+            solver.update(k=2, directed=directed)
+            found, groups = solver.result
+            if found:
+                apply_kcolor_highlight(solver, hovered=True, vertices=vertices)
+            break
+
+def also_highlight_edges(hovered_problem, members, edges):
+    # 2) If this is a path/cycle problem, also highlight the path edges
+    name = hovered_problem.name
+    if name in ("HAMPATH", "HAMCYCLE", "LONGEST-PATH") and len(members) > 1:
+        # walk consecutive pairs
+        for i in range(len(members) - 1):
+            u, v = members[i], members[i + 1]
+            for edge in edges:
+                if {edge.start.name, edge.end.name} == {u, v}:
+                    edge.highlight = True
+
+        # for HAMCYCLE, also close the loop back to the start
+        if name == "HAMCYCLE":
+            u, v = members[-1], members[0]
+            for edge in edges:
+                if {edge.start.name, edge.end.name} == {u, v}:
+                    edge.highlight = True
+
 def main():
     pygame.init()
 
@@ -253,6 +304,13 @@ def main():
     while True:
         screen.fill(BACKGROUND_COLOR)
         pos = pygame.mouse.get_pos()  # Needed outside event loop
+
+        # fast lookup from (u,v) → Edge object
+        edge_map = {
+            (min(e.start.name, e.end.name), max(e.start.name, e.end.name)): e
+            for e in edges
+        }
+
         hovered_vertex = get_vertex_at_pos(vertices, pos)
         hovered_edge = get_edge_at_pos(edges, pos)
         for e in edges:
@@ -509,6 +567,10 @@ def main():
                             v.pos[0] += dx
                             v.pos[1] += dy
                         last_mouse_pos = pos
+        for v in vertices:
+            v.highlight = False
+        # for e in edges:
+        #     e.highlight = False
 
         hovered_problem = None
         y = 60
@@ -521,14 +583,31 @@ def main():
             if hovered:
                 hovered_problem = solver
 
-        for v in vertices:
-            v.highlight = False
         if hovered_problem:
             found, members = hovered_problem.result
-            member_set = set(members)
-            for v in vertices:
-                v.highlight = v.name in member_set
+            if found:
+                apply_highlights(members, vertices, edges)
+                # old nested loops here…
+                for i in range(len(members) - 1):
+                    u, v = members[i], members[i + 1]
+                    for edge in edges:
+                        if {edge.start.name, edge.end.name} == {u, v}:
+                            edge.highlight = True
 
+                if hovered_problem.name == "HAMCYCLE":
+                    u, v = members[-1], members[0]
+                    for edge in edges:
+                        if {edge.start.name, edge.end.name} == {u, v}:
+                            edge.highlight = True
+
+        if not input_mode:
+            diagnostics.update(directed=directed)
+            diagnostics.render(screen, DEBUG_FONT, pos)
+            if diagnostics.hovered_diagnostic:
+                key, elements = diagnostics.hovered_diagnostic
+                apply_highlights(elements, vertices, edges)
+                if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
+                    apply_bipartite_highlight(np_problems, vertices, directed)
 
         for edge in edges:
             is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
@@ -559,9 +638,7 @@ def main():
         draw_fps(screen, clock)
 
         physics.update()
-        if not input_mode:
-            diagnostics.update(directed=directed)
-            diagnostics.render(screen, DEBUG_FONT)
+
 
         pygame.display.flip()
         clock.tick(60)

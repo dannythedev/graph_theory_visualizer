@@ -1,9 +1,18 @@
+import pygame
+from math_text import get_math_surface
+
+
 class GraphDiagnostics:
     def __init__(self, vertices, edges):
+        self.hovered_diagnostic = None
         self.needs_update = True
         self.vertices = vertices
         self.edges = edges
         self.info = {}
+        self.bridges = []
+
+    def mark_dirty(self):
+        self.needs_update = True
 
     def update(self, directed=False):
         if not self.needs_update:
@@ -15,28 +24,36 @@ class GraphDiagnostics:
 
         visited = set()
 
-        # Core properties
+        # Core structure
+        self.info.clear()
         self.info["Cyclic"] = self._has_cycle(directed, visited.copy())
         self.info["Components"] = self._component_count(visited.copy())
-        self.info["Strongly Connected Components"] = (
+        self.info["SCCs"] = (
             self._strongly_connected_components() if directed else self.info["Components"]
         )
 
-        # Structural properties
-        self.info["Is Tree"] = not directed and not self.info["Cyclic"] and self.info["Components"] == 1
-        self.info["Is Forest"] = not directed and not self.info["Cyclic"]
-        self.info["Is Bipartite"] = self._is_bipartite() if not directed else "N/A"
-        self.info["Bridges"] = self._bridge_count()
+        self.info["Tree"] = not directed and not self.info["Cyclic"] and self.info["Components"] == 1
+        self.info["Forest"] = not directed and not self.info["Cyclic"]
+        self.info["Bipartite"] = self._is_bipartite() if not directed else "N/A"
 
-        # Vertex diagnostics
-        degrees = [len(self.adj[v.name]) for v in self.vertices]
-        self.info["Max/Min Degree"] = f"{max(degrees, default=0)}, {min(degrees, default=0)}"
+        # Bridges
+        self.bridges = self._find_bridges()
+        self.info["Bridges"] = (len(self.bridges), self.bridges)
 
-    def _bridge_count(self):
-        """
-        Counts bridges in an undirected graph using Tarjan's algorithm.
-        Only works correctly if the graph is undirected.
-        """
+        # Degree stats
+        degrees = [(v.name, len(self.adj[v.name])) for v in self.vertices]
+        if degrees:
+            max_val = max(degrees, key=lambda x: x[1])[1]
+            min_val = min(degrees, key=lambda x: x[1])[1]
+            max_nodes = [name for name, deg in degrees if deg == max_val]
+            min_nodes = [name for name, deg in degrees if deg == min_val]
+        else:
+            max_val, min_val, max_nodes, min_nodes = 0, 0, [], []
+
+        self.info["Max Degree"] = (max_val, max_nodes)
+        self.info["Min Degree"] = (min_val, min_nodes)
+
+    def _find_bridges(self):
         time = [0]
         visited = set()
         tin = {}
@@ -56,13 +73,13 @@ class GraphDiagnostics:
                     dfs(to, v)
                     low[v] = min(low[v], low[to])
                     if low[to] > tin[v]:
-                        bridges.append((v, to))
+                        bridges.append((min(v, to), max(v, to)))  # sorted for consistency
 
         for v in self.adj:
             if v not in visited:
                 dfs(v, None)
 
-        return len(bridges)
+        return bridges
 
     def _build_adj(self, directed):
         adj = {v.name: set() for v in self.vertices}
@@ -73,10 +90,10 @@ class GraphDiagnostics:
         return adj
 
     def _build_adj_reverse(self):
-        rev_adj = {v.name: set() for v in self.vertices}
+        rev = {v.name: set() for v in self.vertices}
         for e in self.edges:
-            rev_adj[e.end.name].add(e.start.name)
-        return rev_adj
+            rev[e.end.name].add(e.start.name)
+        return rev
 
     def _has_cycle(self, directed, visited):
         if directed:
@@ -84,22 +101,20 @@ class GraphDiagnostics:
             def dfs(v):
                 visited.add(v)
                 rec_stack.add(v)
-                for neighbor in self.adj[v]:
-                    if neighbor not in visited:
-                        if dfs(neighbor):
-                            return True
-                    elif neighbor in rec_stack:
+                for n in self.adj[v]:
+                    if n not in visited:
+                        if dfs(n): return True
+                    elif n in rec_stack:
                         return True
                 rec_stack.remove(v)
                 return False
         else:
             def dfs(v, parent):
                 visited.add(v)
-                for neighbor in self.adj[v]:
-                    if neighbor not in visited:
-                        if dfs(neighbor, v):
-                            return True
-                    elif neighbor != parent:
+                for n in self.adj[v]:
+                    if n not in visited:
+                        if dfs(n, v): return True
+                    elif n != parent:
                         return True
                 return False
 
@@ -118,8 +133,8 @@ class GraphDiagnostics:
                     dfs(n)
         for v in self.adj:
             if v not in visited:
-                count += 1
                 dfs(v)
+                count += 1
         return count
 
     def _strongly_connected_components(self):
@@ -128,9 +143,9 @@ class GraphDiagnostics:
 
         def dfs1(v):
             visited.add(v)
-            for neighbor in self.adj[v]:
-                if neighbor not in visited:
-                    dfs1(neighbor)
+            for n in self.adj[v]:
+                if n not in visited:
+                    dfs1(n)
             order.append(v)
 
         for v in self.adj:
@@ -142,9 +157,9 @@ class GraphDiagnostics:
 
         def dfs2(v):
             visited.add(v)
-            for neighbor in self.rev_adj[v]:
-                if neighbor not in visited:
-                    dfs2(neighbor)
+            for n in self.rev_adj[v]:
+                if n not in visited:
+                    dfs2(n)
 
         for v in reversed(order):
             if v not in visited:
@@ -169,12 +184,35 @@ class GraphDiagnostics:
                             return False
         return True
 
-    def mark_dirty(self):
-        self.needs_update = True
+    def render(self, screen, font, mouse_pos=None):
+        y_start = screen.get_height() - len(self.info) * 15
+        self.hovered_diagnostic = None
 
-    def render(self, screen, font):
-        y_start = screen.get_height() - len(self.info.items())*15
         for key, val in self.info.items():
-            text = font.render(f"{key}: {val}", True, (180, 180, 255))
-            screen.blit(text, (10, y_start))
+            is_hovered = mouse_pos and pygame.Rect(10, y_start, 780, 15).collidepoint(mouse_pos)
+            color = (255, 255, 100) if is_hovered else (180, 180, 255)
+
+            screen.blit(font.render(f"{key}:", True, color), (10, y_start))
+
+            if isinstance(val, tuple) and len(val) == 2:
+                count, elements = val
+                screen.blit(font.render(f"{count}", True, color), (150, y_start))
+
+                if all(isinstance(x, tuple) and len(x) == 2 for x in elements):  # edges
+                    latex_expr = r",\ ".join(f"({a},{b})" for a, b in elements)
+                else:  # vertices
+                    latex_expr = r",\ ".join(elements)
+
+                latex_surface = get_math_surface(latex_expr, color, fontsize=5)
+                baseline = y_start + (font.get_height() - latex_surface.get_height()) // 2
+                screen.blit(latex_surface, (200, baseline))
+
+                if is_hovered:
+                    self.hovered_diagnostic = (key, elements)
+
+            else:
+                screen.blit(font.render(str(val), True, color), (150, y_start))
+                if is_hovered:
+                    self.hovered_diagnostic = (key, None)  # Mark row as hovered, but no elements
+
             y_start += 14
