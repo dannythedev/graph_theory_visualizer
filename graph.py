@@ -60,7 +60,7 @@ class Edge:
             mid_y = (y1 + y2) / 2
 
             # Compute perpendicular offset (normal vector)
-            normal_len = 12  # pixels away from the line
+            normal_len = 15  # pixels away from the line
             nx = -dy
             ny = dx
             length = math.hypot(nx, ny)

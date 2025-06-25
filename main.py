@@ -545,10 +545,16 @@ def main():
         screen.blit(k_label, label_rect)
 
         if input_mode:
-            pygame.draw.rect(screen, INPUT_BOX_COLOR, (10, 550, 780, 40), border_radius=6)
+            EDIT_RECT_DYNAMIC = pygame.Rect(
+                10,
+                screen.get_height() - 50,
+                max(screen.get_width() - 500, 300),
+                40
+            )
+            pygame.draw.rect(screen, INPUT_BOX_COLOR, EDIT_RECT_DYNAMIC, border_radius=6)
             label = "Editing Vertex Name:" if input_mode == 'vertex' else "Editing Edge Value:"
             prompt = INPUT_FONT.render(f"{label} {input_text}", True, INPUT_TEXT_COLOR)
-            screen.blit(prompt, (20, 563))
+            screen.blit(prompt, (20, EDIT_RECT_DYNAMIC.top + 15))
 
         draw_fps(screen, clock)
 

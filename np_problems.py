@@ -2,6 +2,7 @@ import itertools
 import threading
 import pygame
 from math_text import get_math_surface
+from functools import lru_cache
 
 
 class NPProblem:
@@ -42,7 +43,7 @@ class NPProblem:
 
         # Column values
         title = self.name
-        k_input = f"k={k}" if self.name != "HAMPATH" else ""
+        k_input = f"k={k}" if self.name not in ["HAMPATH", "HAMCYCLE", "LONGEST-PATH"] else ""
 
         # Render result
         if found is None:
@@ -131,6 +132,7 @@ class VertexCoverSolver(NPProblem):
                 return True, list(cover)
         return False, []
 
+
 class HamiltonianPathSolver(NPProblem):
     def __init__(self, v, e):
         super().__init__("HAMPATH", v, e)
@@ -139,37 +141,37 @@ class HamiltonianPathSolver(NPProblem):
         if len(self.vertices) < 2:
             return False, []
 
-        # Build adjacency list
-        adj = {v.name: set() for v in self.vertices}
+        # Map vertex names to indices for bitmasking
+        index_map = {v.name: i for i, v in enumerate(self.vertices)}
+        name_map = {i: v.name for v, i in zip(self.vertices, index_map.values())}
+        n = len(self.vertices)
+
+        # Build adjacency list (indexed)
+        adj = {i: set() for i in range(n)}
         for edge in self.edges:
-            adj[edge.start.name].add(edge.end.name)
+            u = index_map[edge.start.name]
+            v = index_map[edge.end.name]
+            adj[u].add(v)
             if not directed:
-                adj[edge.end.name].add(edge.start.name)
+                adj[v].add(u)
 
-        # Early exit: check connectivity
-        visited = set()
+        @lru_cache(maxsize=None)
+        def dp(current, visited):
+            if visited == (1 << n) - 1:
+                return [current]  # path ends here
 
-        def dfs(node):
-            visited.add(node)
-            for neighbor in adj[node]:
-                if cancel_event and cancel_event.is_set():
-                    return
-                if neighbor not in visited:
-                    dfs(neighbor)
+            for neighbor in adj[current]:
+                if not (visited & (1 << neighbor)):
+                    suffix = dp(neighbor, visited | (1 << neighbor))
+                    if suffix:
+                        return [current] + suffix
+            return []
 
-        start_node = self.vertices[0].name
-        dfs(start_node)
-
-        if len(visited) != len(self.vertices):
-            return False, []
-
-        # Try all permutations
-        names = [v.name for v in self.vertices]
-        for path in itertools.permutations(names):
-            if cancel_event and cancel_event.is_set():
-                return False, []
-            if all(path[i + 1] in adj[path[i]] for i in range(len(path) - 1)):
-                return True, list(path)
+        # Try starting from each node
+        for start in range(n):
+            path = dp(start, 1 << start)
+            if path and len(path) == n:
+                return True, [name_map[i] for i in path]
 
         return False, []
 
@@ -222,16 +224,135 @@ class KColoringSolver(NPProblem):
         else:
             return False, []
 
+class HamiltonianCycleSolver(NPProblem):
+    def __init__(self, v, e):
+        super().__init__("HAMCYCLE", v, e)
+
+    def compute(self, k, directed=False, cancel_event=None):
+        if len(self.vertices) < 2:
+            return False, []
+
+        index_map = {v.name: i for i, v in enumerate(self.vertices)}
+        name_map = {i: v.name for v, i in zip(self.vertices, index_map.values())}
+        n = len(self.vertices)
+
+        # Build adjacency list (indexed)
+        adj = {i: set() for i in range(n)}
+        for edge in self.edges:
+            u = index_map[edge.start.name]
+            v = index_map[edge.end.name]
+            adj[u].add(v)
+            if not directed:
+                adj[v].add(u)
+
+        @lru_cache(maxsize=None)
+        def dp(current, visited):
+            if visited == (1 << n) - 1:
+                return current in adj[start]  # cycle if can return to start
+
+            for neighbor in adj[current]:
+                if not (visited & (1 << neighbor)):
+                    if dp(neighbor, visited | (1 << neighbor)):
+                        path_map[(visited, current)] = neighbor
+                        return True
+            return False
+
+        for start in range(n):
+            path_map = {}
+            if dp(start, 1 << start):
+                # Reconstruct path
+                path = [start]
+                visited = 1 << start
+                curr = start
+                while len(path) < n:
+                    curr = path_map[(visited, curr)]
+                    visited |= 1 << curr
+                    path.append(curr)
+                path.append(start)  # close the cycle
+                return True, [name_map[i] for i in path]
+
+        return False, []
+
+class MinCutSolver(NPProblem):
+    def __init__(self, v, e):
+        super().__init__("MIN-CUT", v, e)
+
+    def compute(self, k, directed=False):
+        from itertools import combinations
+
+        if k >= len(self.vertices) - 1:
+            return False, []
+
+        # Build adjacency map
+        adj = {v.name: set() for v in self.vertices}
+        for edge in self.edges:
+            adj[edge.start.name].add(edge.end.name)
+            if not directed:
+                adj[edge.end.name].add(edge.start.name)
+
+        def is_disconnected(excluded):
+            seen = set()
+            remaining = [v.name for v in self.vertices if v.name not in excluded]
+            if not remaining:
+                return True
+
+            def dfs(u):
+                seen.add(u)
+                for v in adj[u]:
+                    if v not in excluded and v not in seen:
+                        dfs(v)
+
+            dfs(remaining[0])
+            return len(seen) < len(remaining)
+
+        # Try all sets of size k
+        for group in combinations(self.vertices, k):
+            names = {v.name for v in group}
+            if is_disconnected(names):
+                return True, list(names)
+
+        return False, []
+
+class LongestPathSolver(NPProblem):
+    def __init__(self, v, e):
+        super().__init__("LONGEST-PATH", v, e)
+
+    def compute(self, k, directed=False):
+        adj = {v.name: set() for v in self.vertices}
+        for e in self.edges:
+            adj[e.start.name].add(e.end.name)
+            if not directed:
+                adj[e.end.name].add(e.start.name)
+
+        longest = []
+
+        def dfs(path, visited):
+            nonlocal longest
+            if len(path) > len(longest):
+                longest = list(path)
+            for neighbor in adj[path[-1]]:
+                if neighbor not in visited:
+                    dfs(path + [neighbor], visited | {neighbor})
+
+        for v in self.vertices:
+            dfs([v.name], {v.name})
+
+        return (len(longest) > 1), longest
 
 
 def get_all_problems(vertices, edges):
     return [
         KColoringSolver(vertices, edges),
+        VertexCoverSolver(vertices, edges),
+        HamiltonianCycleSolver(vertices, edges),
+        HamiltonianPathSolver(vertices, edges),
+        LongestPathSolver(vertices, edges),
         IndependentSetSolver(vertices, edges),
         CliqueSolver(vertices, edges),
-        VertexCoverSolver(vertices, edges),
-        HamiltonianPathSolver(vertices, edges)
+        MinCutSolver(vertices, edges),
+
     ]
+
 
 
 def mark_all_problems_dirty(problems):
