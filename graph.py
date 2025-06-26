@@ -1,7 +1,8 @@
 from math_text import get_math_surface
-import re
 import math
 from config import *
+from utils import get_base_and_index, is_within_screen_margin, is_clear_position
+
 
 class Vertex:
     def __init__(self, pos, name, custom_color=None):
@@ -110,8 +111,8 @@ class Edge:
 def get_vertex_at_pos(vertices, pos):
     return next((v for v in vertices if v.is_clicked(pos)), None)
 
-def get_edges_at_pos_original(edges, pos):
-    return [e for e in edges if e.is_clicked(pos)]
+# def get_edges_at_pos_original(edges, pos):
+#     return [e for e in edges if e.is_clicked(pos)]
 
 def get_edge_at_pos(edges, pos):
     closest_edge = None
@@ -153,45 +154,14 @@ def get_edge_at_pos(edges, pos):
 
 
 
-def edge_exists(v1, v2, edge_lookup):
+def edge_exists(v1, v2, edge_lookup, directed=False):
+    if directed:
+        return (v1.name, v2.name) in edge_lookup
     return (min(v1.name, v2.name), max(v1.name, v2.name)) in edge_lookup
+
 
 def rebuild_edge_lookup(edges):
     return set((min(e.start.name, e.end.name), max(e.start.name, e.end.name)) for e in edges)
-
-def get_base_and_index(name):
-    match = re.match(r"^(.*?)(?:_(\d+))?$", name)
-    if match:
-        base = match.group(1)
-        index = int(match.group(2)) if match.group(2) else 1
-        return base, index
-    return name, 1
-
-def is_clear_position(vertices, new_positions, min_dist=2 * VERTEX_RADIUS + 5):
-    """Check if new positions avoid overlaps with any existing vertex."""
-    for nx, ny in new_positions:
-        for v in vertices:
-            dx, dy = nx - v.pos[0], ny - v.pos[1]
-            if dx * dx + dy * dy < min_dist * min_dist:
-                return False
-    return True
-
-def is_within_screen(positions, screen_rect):
-    """Returns True if all positions fall within screen bounds."""
-    for x, y in positions:
-        if not screen_rect.collidepoint(x, y):
-            return False
-    return True
-
-def is_within_screen_margin(positions, rect, margin_x, margin_y):
-    for x, y in positions:
-        if x < -margin_x or x > rect.width + margin_x:
-            return False
-        if y < -margin_y or y > rect.height + margin_y:
-            return False
-    return True
-
-
 
 
 def duplicate_graph(og_vertices, og_edges, spacing=(50, 50), times=1):

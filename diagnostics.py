@@ -1,5 +1,6 @@
 import pygame
 from math_text import get_math_surface
+from utils import generic_dfs, dfs_stack
 
 
 class GraphDiagnostics:
@@ -22,12 +23,13 @@ class GraphDiagnostics:
         self.adj = self._build_adj(directed)
         self.rev_adj = self._build_adj_reverse() if directed else None
 
-        visited = set()
 
         # Core structure
         self.info.clear()
+        visited = set()
         self.info["Cyclic"] = self._has_cycle(directed, visited.copy())
         self.info["Components"] = self._component_count(visited.copy())
+
         self.info["SCCs"] = (
             self._strongly_connected_components() if directed else self.info["Components"]
         )
@@ -60,24 +62,9 @@ class GraphDiagnostics:
         low = {}
         bridges = []
 
-        def dfs(v, parent):
-            visited.add(v)
-            tin[v] = low[v] = time[0]
-            time[0] += 1
-            for to in self.adj[v]:
-                if to == parent:
-                    continue
-                if to in visited:
-                    low[v] = min(low[v], tin[to])
-                else:
-                    dfs(to, v)
-                    low[v] = min(low[v], low[to])
-                    if low[to] > tin[v]:
-                        bridges.append((min(v, to), max(v, to)))  # sorted for consistency
-
         for v in self.adj:
             if v not in visited:
-                dfs(v, None)
+                generic_dfs(self.adj, v, visited, tin=tin, low=low, time=time, bridges=bridges)
 
         return bridges
 
@@ -98,42 +85,27 @@ class GraphDiagnostics:
     def _has_cycle(self, directed, visited):
         if directed:
             rec_stack = set()
-            def dfs(v):
-                visited.add(v)
-                rec_stack.add(v)
-                for n in self.adj[v]:
-                    if n not in visited:
-                        if dfs(n): return True
-                    elif n in rec_stack:
-                        return True
-                rec_stack.remove(v)
+            try:
+                for v in self.adj:
+                    if v not in visited:
+                        generic_dfs(self.adj, v, visited, rec_stack=rec_stack)
                 return False
-        else:
-            def dfs(v, parent):
-                visited.add(v)
-                for n in self.adj[v]:
-                    if n not in visited:
-                        if dfs(n, v): return True
-                    elif n != parent:
-                        return True
-                return False
-
-        for v in self.adj:
-            if v not in visited:
-                if dfs(v) if directed else dfs(v, None):
+            except Exception as e:
+                if str(e) == "CycleDetected":
                     return True
-        return False
+                return None
+        else:
+            tin, low, time = {}, {}, [0]
+            for v in self.adj:
+                if v not in visited:
+                    generic_dfs(self.adj, v, visited, tin=tin, low=low, time=time)
+            return False
 
     def _component_count(self, visited):
         count = 0
-        def dfs(v):
-            visited.add(v)
-            for n in self.adj[v]:
-                if n not in visited:
-                    dfs(n)
         for v in self.adj:
             if v not in visited:
-                dfs(v)
+                dfs_stack(self.adj, v, visited)
                 count += 1
         return count
 
@@ -141,29 +113,15 @@ class GraphDiagnostics:
         visited = set()
         order = []
 
-        def dfs1(v):
-            visited.add(v)
-            for n in self.adj[v]:
-                if n not in visited:
-                    dfs1(n)
-            order.append(v)
-
         for v in self.adj:
             if v not in visited:
-                dfs1(v)
+                generic_dfs(self.adj, v, visited, on_exit=order.append)
 
         visited.clear()
         count = 0
-
-        def dfs2(v):
-            visited.add(v)
-            for n in self.rev_adj[v]:
-                if n not in visited:
-                    dfs2(n)
-
         for v in reversed(order):
             if v not in visited:
-                dfs2(v)
+                dfs_stack(self.rev_adj, v, visited)
                 count += 1
 
         return count

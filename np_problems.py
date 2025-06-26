@@ -4,6 +4,8 @@ import pygame
 from math_text import get_math_surface
 from functools import lru_cache
 
+from utils import dfs_paths_backtrack, dfs_stack
+
 
 class NPProblem:
     def __init__(self, name, vertices, edges):
@@ -16,6 +18,24 @@ class NPProblem:
         self.needs_update = True
 
         self._thread = None
+
+    def build_adj(self, directed):
+        adj = {v.name: set() for v in self.vertices}
+        for e in self.edges:
+            adj[e.start.name].add(e.end.name)
+            if not directed:
+                adj[e.end.name].add(e.start.name)
+        return adj
+
+    def build_indexed_adj(self, directed, n, index_map):
+        adj = {i: set() for i in range(n)}
+        for edge in self.edges:
+            u = index_map[edge.start.name]
+            v = index_map[edge.end.name]
+            adj[u].add(v)
+            if not directed:
+                adj[v].add(u)
+        return adj
 
     def compute(self, k, directed):  # Override in subclasses
         return False, []
@@ -34,13 +54,14 @@ class NPProblem:
         self.needs_update = False
 
     def update(self, k, directed=False):
-        if self.needs_update or self.k != k:
+        if self.k != k:
+            self.needs_update = True
+        if self.needs_update:
             self.k = k
-            self.result = (None, [])  # Mark as computing
+            self.result = (None, [])
             self.needs_update = False
             self._thread = threading.Thread(target=self._run_compute_thread, args=(k, directed))
             self._thread.start()
-
 
     def render_debug(self, screen, font, k, y, mouse_pos, directed):
         self.update(k, directed)
@@ -91,12 +112,7 @@ class IndependentSetSolver(NPProblem):
         edge_count = len(self.edges)
         if not directed and edge_count >= len(self.vertices) * (len(self.vertices) - 1) // 2:
             return False, []
-
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
+        adj = self.build_adj(directed)
         for combo in itertools.combinations(self.vertices, k):
             names = [v.name for v in combo]
             if all(n2 not in adj[n1] for i, n1 in enumerate(names) for n2 in names[i+1:]):
@@ -157,13 +173,7 @@ class HamiltonianPathSolver(NPProblem):
         n = len(self.vertices)
 
         # Build adjacency list (indexed)
-        adj = {i: set() for i in range(n)}
-        for edge in self.edges:
-            u = index_map[edge.start.name]
-            v = index_map[edge.end.name]
-            adj[u].add(v)
-            if not directed:
-                adj[v].add(u)
+        adj = self.build_indexed_adj(directed, n, index_map)
 
         @lru_cache(maxsize=None)
         def dp(current, visited):
@@ -199,11 +209,7 @@ class KColoringSolver(NPProblem):
             return False, []
 
         # Build adjacency map
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
+        adj = self.build_adj(directed)
 
         # Recursive backtracking to try color assignments
         names = [v.name for v in self.vertices]
@@ -231,7 +237,8 @@ class KColoringSolver(NPProblem):
                 colored_groups.setdefault(color, []).append(node)
 
             # Flatten groups for display
-            flat_list = [f"{color}: [{', '.join(sorted(group))}]" for color, group in sorted(colored_groups.items())]
+            flat_list = [f"{color}: [{', '.join(group)}]" for color, group in sorted(colored_groups.items())]
+
             return True, flat_list
         else:
             return False, []
@@ -249,13 +256,7 @@ class HamiltonianCycleSolver(NPProblem):
         n = len(self.vertices)
 
         # Build adjacency list (indexed)
-        adj = {i: set() for i in range(n)}
-        for edge in self.edges:
-            u = index_map[edge.start.name]
-            v = index_map[edge.end.name]
-            adj[u].add(v)
-            if not directed:
-                adj[v].add(u)
+        adj = self.build_indexed_adj(directed, n, index_map)
 
         @lru_cache(maxsize=None)
         def dp(current, visited):
@@ -298,11 +299,7 @@ class MinCutSolver(NPProblem):
             return False, []
 
         # Build adjacency map
-        adj = {v.name: set() for v in self.vertices}
-        for edge in self.edges:
-            adj[edge.start.name].add(edge.end.name)
-            if not directed:
-                adj[edge.end.name].add(edge.start.name)
+        adj = self.build_adj(directed)
 
         def is_disconnected(excluded):
             seen = set()
@@ -310,13 +307,13 @@ class MinCutSolver(NPProblem):
             if not remaining:
                 return True
 
-            def dfs(u):
-                seen.add(u)
-                for v in adj[u]:
-                    if v not in excluded and v not in seen:
-                        dfs(v)
+            # Build filtered adjacency list with excluded nodes removed
+            adj_filtered = {
+                u: [v for v in adj[u] if v not in excluded]
+                for u in adj if u not in excluded
+            }
 
-            dfs(remaining[0])
+            dfs_stack(adj_filtered, remaining[0], seen)
             return len(seen) < len(remaining)
 
         # Try all sets of size k
@@ -332,24 +329,16 @@ class LongestPathSolver(NPProblem):
         super().__init__("LONGEST-PATH", v, e)
 
     def compute(self, k, directed=False):
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
-
+        adj = self.build_adj(directed)
         longest = []
 
-        def dfs(path, visited):
+        def on_path_found(path):
             nonlocal longest
             if len(path) > len(longest):
                 longest = list(path)
-            for neighbor in adj[path[-1]]:
-                if neighbor not in visited:
-                    dfs(path + [neighbor], visited | {neighbor})
 
         for v in self.vertices:
-            dfs([v.name], {v.name})
+            dfs_paths_backtrack(adj, [v.name], {v.name}, on_path_found)
 
         found = len(longest) > 1
         if found:
@@ -370,8 +359,6 @@ def get_all_problems(vertices, edges):
         MinCutSolver(vertices, edges),
 
     ]
-
-
 
 def mark_all_problems_dirty(problems):
     for p in problems:

@@ -2,12 +2,14 @@ import math
 import sys
 import string
 import json
-from graph import apply_graph_complement
 from diagnostics import GraphDiagnostics
 from config import *
-from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph
+from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph, apply_graph_complement
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
+from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps
+from zoom_manager import ZoomManager
+
 
 def save_graph(vertices, edges, directed=False, filename="graph.json"):
     with open(filename, "w") as f:
@@ -88,47 +90,6 @@ def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
     screen.blit(dup_count_text, dup_count_text.get_rect(center=(knob_x, knob_y)))
 
 
-def update_k_value_from_input(input_text):
-    try:
-        return max(1, int(input_text))
-    except ValueError:
-        return None
-
-def draw_fps(screen, clock):
-    fps = int(clock.get_fps())
-    text = DEBUG_FONT.render(f"{fps} FPS", True, (150, 255, 150))
-    screen.blit(text, text.get_rect(bottomright=(screen.get_width()-20, screen.get_height()-5)))
-
-import colorsys
-
-# Colors to avoid (RGB)
-AVOID_COLORS = [
-    (100, 149, 237),  # VERTEX_COLOR
-    (70, 130, 180),   # VERTEX_HOVER_COLOR
-    (255, 99, 71),    # SELECTED_COLOR
-]
-
-def color_distance(c1, c2):
-    # Euclidean distance in RGB
-    return sum((a - b) ** 2 for a, b in zip(c1, c2)) ** 0.5
-
-def generate_color_for_index(i):
-    for attempt in range(10):  # Try 10 variations per index
-        h = ((i + attempt * 0.2) * 0.618033988749895) % 1.0  # Golden ratio spread
-        s = 0.5  # Moderate saturation
-        v = 0.85  # Not too bright
-
-        r, g, b = colorsys.hsv_to_rgb(h, s, v)
-        rgb = (int(r * 255), int(g * 255), int(b * 255))
-
-        # Make sure it's not too close to any UI color
-        if all(color_distance(rgb, avoid) > 60 for avoid in AVOID_COLORS):
-            return rgb
-
-    # Fallback if all were too close
-    return rgb
-
-
 def apply_kcolor_highlight(solver, hovered, vertices):
     # Clear all custom colors by default
     for v in vertices:
@@ -147,51 +108,6 @@ def apply_kcolor_highlight(solver, hovered, vertices):
                         v.custom_color = color
             except Exception as e:
                 print(f"Error parsing k-color group '{group}':", e)
-
-from string import ascii_uppercase
-
-def get_next_available_vertex_name(vertices, name_iter):
-    """Returns the next available vertex name (A-Z, then A', B', ..., then A'', B'', ...)"""
-    used_names = {v.name for v in vertices}
-
-    # Step 1: Try basic iterator first (A–Z)
-    try:
-        while True:
-            name = next(name_iter)
-            if name not in used_names:
-                return name
-    except StopIteration:
-        pass
-
-    # Step 2: Fallback: iterate over A–Z with increasing apostrophe suffixes
-    suffix = "'"
-    while True:
-        for base in ascii_uppercase:
-            candidate = base + suffix
-            if candidate not in used_names:
-                return candidate
-        suffix += "'"  # Increase suffix for next round (e.g., A'', B'', ...)
-
-class ZoomManager:
-    def __init__(self):
-        self.scale = 1.0
-        self.min_scale = 0.4
-        self.max_scale = 2.0
-
-    def apply_zoom(self, zoom_in, center, vertices):
-        factor = 1.1 if zoom_in else 0.9
-        new_scale = self.scale * factor
-        if not (self.min_scale <= new_scale <= self.max_scale):
-            return
-
-        cx, cy = center
-        for v in vertices:
-            dx = v.pos[0] - cx
-            dy = v.pos[1] - cy
-            v.pos[0] = int(cx + dx * factor)
-            v.pos[1] = int(cy + dy * factor)
-
-        self.scale = new_scale
 
 def apply_highlights(elements, vertices, edges):
     for v in vertices:
@@ -244,6 +160,45 @@ def also_highlight_edges(hovered_problem, members, edges):
                 if {edge.start.name, edge.end.name} == {u, v}:
                     edge.highlight = True
 
+
+def handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed_state, duplicate_count):
+    """
+    Handles clicks on top-row buttons.
+    Returns: (handled: bool, new_directed: bool)
+    """
+    if SAVE_BUTTON_RECT.collidepoint(pos):
+        save_graph(vertices, edges, directed_state)
+        return True, directed_state
+
+    elif LOAD_BUTTON_RECT.collidepoint(pos):
+        vertex_names, loaded_directed = load_graph("graph.json", vertices, edges)
+        mark_all_problems_dirty(np_problems)
+        diagnostics.mark_dirty()
+        return True, loaded_directed
+
+    elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
+        if duplicate_graph(vertices, edges, times=duplicate_count):
+            mark_all_problems_dirty(np_problems)
+            diagnostics.mark_dirty()
+        return True, directed_state
+
+    elif COMPLEMENT_BUTTON_RECT.collidepoint(pos):
+        apply_graph_complement(vertices, edges, directed_state)
+        mark_all_problems_dirty(np_problems)
+        diagnostics.mark_dirty()
+        return True, directed_state
+
+    elif CLEAR_BUTTON_RECT.collidepoint(pos):
+        vertices.clear()
+        edges.clear()
+        mark_all_problems_dirty(np_problems)
+        diagnostics.mark_dirty()
+        return True, directed_state
+
+    return False, directed_state
+
+
+
 def main():
     pygame.init()
 
@@ -288,6 +243,15 @@ def main():
                 DUPLICATE_BUTTON_RECT.collidepoint(pos) or
                 COMPLEMENT_BUTTON_RECT.collidepoint(pos))
 
+    def draw_edges_and_vertices():
+        for edge in edges:
+            is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
+            offset = math.pi / 18 if is_opposite and directed else 0
+            edge.draw(screen, directed=directed, offset_angle=offset)
+
+        for vertex in vertices:
+            vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
+
     def draw_all_buttons():
         save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)
         load_hovered = LOAD_BUTTON_RECT.collidepoint(pos)
@@ -315,11 +279,10 @@ def main():
         }
 
         hovered_vertex = get_vertex_at_pos(vertices, pos)
-        hovered_edge = get_edge_at_pos(edges, pos)
-        for e in edges:
-            e.highlight = (e == hovered_edge)
-
-
+        if not hovered_vertex:
+            hovered_edge = get_edge_at_pos(edges, pos)
+            for e in edges:
+                e.highlight = (e == hovered_edge)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -380,8 +343,6 @@ def main():
                     if not hovered_vertex and not hovered_edge and not DUPLICATE_SLIDER_RECT.collidepoint(pos):
                         panning = True
                         last_mouse_pos = pos
-
-
                 elif event.button == 2 and hovered_vertex:
                     moving_vertex = hovered_vertex
                     drag_start_pos = pos
@@ -389,73 +350,9 @@ def main():
                     scroll_drag_strength = 0.25  # Much stronger nudge
                     continue
 
-                if SAVE_BUTTON_RECT.collidepoint(pos):
-                    save_graph(vertices, edges, directed)
-                    continue
-                elif LOAD_BUTTON_RECT.collidepoint(pos):
-                    vertex_names, loaded_directed = load_graph("graph.json", vertices, edges)
-                    directed = loaded_directed  # Update current mode
-                    mark_all_problems_dirty(np_problems)
-                    diagnostics.mark_dirty()
-                    continue
-
-                elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
-                    if duplicate_graph(vertices, edges, times=duplicate_count):
-                        mark_all_problems_dirty(np_problems)
-                        diagnostics.mark_dirty()
-                    continue
-
-                elif COMPLEMENT_BUTTON_RECT.collidepoint(pos):
-                    apply_graph_complement(vertices, edges, directed)
-                    mark_all_problems_dirty(np_problems)
-                    diagnostics.mark_dirty()
-                    continue
-
-                elif DUPLICATE_SLIDER_RECT.collidepoint(pos):
-                    slider_dragging = True
-
-                elif K_INPUT_BOX_RECT.collidepoint(pos):
-                    k_input_active = True
-                    input_text = str(k_value)
-                    continue
-                elif CLEAR_BUTTON_RECT.collidepoint(pos):
-                    vertices.clear()
-                    edges.clear()
-                    selected_vertex = None
-                    vertex_names = iter(string.ascii_uppercase)
-                    mark_all_problems_dirty(np_problems)
-                    diagnostics.mark_dirty()
-
-                    continue
-                elif TOGGLE_DIRECTED_RECT.collidepoint(pos):
-                    directed = not directed
-                    if directed:
-                        # Convert undirected to directed (random directions)
-                        import random
-                        new_edges = []
-                        for e in edges:
-                            if not any(e2.start == e.end and e2.end == e.start for e2 in edges):
-                                if random.choice([True, False]):
-                                    new_edges.append(e)
-                                else:
-                                    new_edges.append(Edge(e.end, e.start, e.value))
-                            else:
-                                new_edges.append(e)  # already bidirectional
-                        edges[:] = new_edges
-                    else:
-                        # Remove reverse-direction duplicates
-                        seen = set()
-                        new_edges = []
-                        for e in edges:
-                            key = tuple(sorted([e.start.name, e.end.name]))
-                            if key not in seen:
-                                new_edges.append(e)
-                                seen.add(key)
-                        edges[:] = new_edges
-
-                    mark_all_problems_dirty(np_problems)
-                    diagnostics.mark_dirty()
-
+                handled, directed = handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed,
+                                                       duplicate_count)
+                if handled:
                     continue
 
                 clicked_vertex = hovered_vertex
@@ -526,7 +423,7 @@ def main():
                         held = pygame.time.get_ticks() - mouse_down_time
                         dist = math.hypot(pos[0] - mouse_down_pos[0], pos[1] - mouse_down_pos[1])
 
-                        if held <= 200 and dist <= 5:
+                        if held <= 100 and dist <= 5:
                             if logic_all_buttons():
                                 if len(vertices) >= VERTEX_LIMIT:
                                     print(f"[INFO] Vertex limit reached ({VERTEX_LIMIT}). Cannot add more.")
@@ -596,18 +493,7 @@ def main():
             found, members = hovered_problem.result
             if found:
                 apply_highlights(members, vertices, edges)
-                # old nested loops here…
-                for i in range(len(members) - 1):
-                    u, v = members[i], members[i + 1]
-                    for edge in edges:
-                        if {edge.start.name, edge.end.name} == {u, v}:
-                            edge.highlight = True
-
-                if hovered_problem.name == "HAMCYCLE":
-                    u, v = members[-1], members[0]
-                    for edge in edges:
-                        if {edge.start.name, edge.end.name} == {u, v}:
-                            edge.highlight = True
+                also_highlight_edges(hovered_problem, members, edges)
 
         if not input_mode:
             diagnostics.update(directed=directed)
@@ -618,13 +504,7 @@ def main():
                 if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
                     apply_bipartite_highlight(np_problems, vertices, directed)
 
-        for edge in edges:
-            is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
-            offset = math.pi / 18 if is_opposite and directed else 0
-            edge.draw(screen, directed=directed, offset_angle=offset)
-
-        for vertex in vertices:
-            vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
+        draw_edges_and_vertices()
         draw_all_buttons()
 
         pygame.draw.rect(screen, (100, 100, 100), K_INPUT_BOX_RECT, border_radius=6)
@@ -645,10 +525,7 @@ def main():
             screen.blit(prompt, (20, EDIT_RECT_DYNAMIC.top + 15))
 
         draw_fps(screen, clock)
-
         physics.update()
-
-
         pygame.display.flip()
         clock.tick(60)
 

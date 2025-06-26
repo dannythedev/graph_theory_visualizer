@@ -36,6 +36,11 @@ DUPLICATE_SLIDER_RECT = pygame.Rect(350, 28, 128, 12)
 COMPLEMENT_BUTTON_RECT = pygame.Rect(488, 10, 95, 32)
 CLEAR_BUTTON_RECT = pygame.Rect(593, 10, 70, 32)
 
-
-
 VERTEX_LIMIT = 50
+
+# Colors to avoid (RGB)
+AVOID_COLORS = [
+    (100, 149, 237),  # VERTEX_COLOR
+    (70, 130, 180),   # VERTEX_HOVER_COLOR
+    (255, 99, 71),    # SELECTED_COLOR
+]

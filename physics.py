@@ -1,3 +1,6 @@
+from utils import dfs_stack
+
+
 class PhysicsSystem:
     def __init__(self, vertices, edges):
         self.vertices = vertices
@@ -31,16 +34,8 @@ class PhysicsSystem:
 
     def get_connected_component(self, start_vertex):
         visited = set()
-
-        def dfs(v):
-            visited.add(v)
-            for e in self.edges:
-                if e.start == v and e.end not in visited:
-                    dfs(e.end)
-                elif e.end == v and e.start not in visited:
-                    dfs(e.start)
-
-        dfs(start_vertex)
+        adj = {v: self.get_connected(v) for v in self.vertices}
+        dfs_stack(adj, start_vertex, visited)
         return visited
 
     def nudge_neighbors(self, moved_vertex, new_pos, old_pos, strength=0.02):
@@ -60,6 +55,9 @@ class PhysicsSystem:
         for v in self.vertices:
             if v in self.velocities:
                 vx, vy = self.velocities[v]
+                if vx == 0.0 and vy == 0.0:
+                    continue
+
                 v.pos[0] += vx
                 v.pos[1] += vy
                 self.velocities[v][0] *= damping
