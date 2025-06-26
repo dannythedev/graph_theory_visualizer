@@ -5,11 +5,11 @@ import json
 from diagnostics import GraphDiagnostics
 from config import *
 from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph, apply_graph_complement
+from math_text import clear_math_surface_cache
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
 from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps
 from zoom_manager import ZoomManager
-
 
 def save_graph(vertices, edges, directed=False, filename="graph.json"):
     with open(filename, "w") as f:
@@ -54,6 +54,19 @@ def draw_button(screen, rect, text, hovered):
     pygame.draw.rect(screen, BUTTON_HOVER_COLOR if hovered else BUTTON_COLOR, rect, border_radius=8)
     label = FONT.render(text, True, BUTTON_TEXT_COLOR)
     screen.blit(label, label.get_rect(center=rect.center))
+
+def is_over_slider_knob(mouse_pos, duplicate_count, SLIDER_MIN, SLIDER_MAX):
+    slider_x = DUPLICATE_SLIDER_RECT.x
+    slider_y = DUPLICATE_SLIDER_RECT.y
+    slider_w = DUPLICATE_SLIDER_RECT.width
+    slider_h = DUPLICATE_SLIDER_RECT.height
+    fill_ratio = (duplicate_count - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)
+    knob_x = slider_x + int(fill_ratio * slider_w)
+    knob_y = slider_y + slider_h // 2
+    knob_radius = slider_h // 2 + 4
+    knob_rect = pygame.Rect(knob_x - knob_radius, knob_y - knob_radius, knob_radius * 2, knob_radius * 2)
+    return knob_rect.collidepoint(mouse_pos)
+
 
 def draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX):
     slider_rect = DUPLICATE_SLIDER_RECT
@@ -161,7 +174,21 @@ def also_highlight_edges(hovered_problem, members, edges):
                     edge.highlight = True
 
 
-def handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed_state, duplicate_count):
+def reset_all(vertices, edges, np_problems, diagnostics, physics):
+    # Clear vertex and edge containers
+    vertices.clear()
+    edges.clear()
+    clear_math_surface_cache()
+    # Reset simulation and analysis systems
+    physics.reset()
+    diagnostics.reset()
+
+    # Reset all NP problems
+    for problem in np_problems:
+        problem.reset()
+
+
+def handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed_state, duplicate_count, physics):
     """
     Handles clicks on top-row buttons.
     Returns: (handled: bool, new_directed: bool)
@@ -188,11 +215,10 @@ def handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed_
         diagnostics.mark_dirty()
         return True, directed_state
 
+
+
     elif CLEAR_BUTTON_RECT.collidepoint(pos):
-        vertices.clear()
-        edges.clear()
-        mark_all_problems_dirty(np_problems)
-        diagnostics.mark_dirty()
+        reset_all(vertices, edges, np_problems, diagnostics, physics)
         return True, directed_state
 
     return False, directed_state
@@ -242,6 +268,8 @@ def main():
                 CLEAR_BUTTON_RECT.collidepoint(pos) or
                 DUPLICATE_BUTTON_RECT.collidepoint(pos) or
                 COMPLEMENT_BUTTON_RECT.collidepoint(pos))
+
+
 
     def draw_edges_and_vertices():
         for edge in edges:
@@ -331,6 +359,9 @@ def main():
 
             elif event.type == pygame.MOUSEBUTTONDOWN and not input_mode:
                 pos = event.pos
+                if is_over_slider_knob(pos, duplicate_count, SLIDER_MIN, SLIDER_MAX):
+                    slider_dragging = True
+                    continue
                 if event.button == 4:  # Scroll up = zoom in
                     zoom.apply_zoom(zoom_in=True, center=pos, vertices=vertices)
                     continue
@@ -351,7 +382,18 @@ def main():
                     continue
 
                 handled, directed = handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed,
-                                                       duplicate_count)
+                                                       duplicate_count, physics)
+                if K_INPUT_BOX_RECT.collidepoint(pos):
+                    k_input_active = True
+                    input_text = ""
+                    continue
+
+                if TOGGLE_DIRECTED_RECT.collidepoint(pos):
+                    directed = not directed
+                    mark_all_problems_dirty(np_problems)
+                    diagnostics.mark_dirty()
+                    continue
+
                 if handled:
                     continue
 
@@ -396,20 +438,42 @@ def main():
                         selected_vertex = None
                         moving_vertex = None
                         dragging = False
+
                     elif selected_vertex:
-                        # Add edge if not duplicate
-                        already_exists = any(e.start == selected_vertex and e.end == clicked_vertex for e in edges)
+                        if directed:
+                            already_exists = any(
+                                e.start == selected_vertex and e.end == clicked_vertex
+                                for e in edges
+                            )
+                        else:
+                            already_exists = any(
+                                {e.start, e.end} == {selected_vertex, clicked_vertex}
+                                for e in edges
+                            )
+
                         if not already_exists:
-                            edges.append(Edge(selected_vertex, clicked_vertex))
-                        selected_vertex = None
-                        mark_all_problems_dirty(np_problems)
-                        diagnostics.mark_dirty()
+                            if len(edges) >= EDGE_LIMIT:
+                                print("[INFO] Cannot add edge: edge limit reached.")
+                            else:
+                                edges.append(Edge(selected_vertex, clicked_vertex))
+                                mark_all_problems_dirty(np_problems)
+                                diagnostics.mark_dirty()
+                            selected_vertex = None
+                        else:
+                            # Edge exists → treat this like a selection change
+                            selected_vertex = clicked_vertex
+                            moving_vertex = clicked_vertex
+                            drag_start_pos = pos
+                            dragging = False
+                            # Don't mark dirty or add edge
+                            continue
 
                     else:
                         selected_vertex = clicked_vertex
                         moving_vertex = clicked_vertex
                         drag_start_pos = pos
                         dragging = False
+
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 slider_dragging = False

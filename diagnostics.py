@@ -12,6 +12,9 @@ class GraphDiagnostics:
         self.info = {}
         self.bridges = []
 
+    def reset(self):
+        self.__init__(self.vertices, self.edges)
+
     def mark_dirty(self):
         self.needs_update = True
 

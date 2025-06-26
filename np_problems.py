@@ -19,6 +19,9 @@ class NPProblem:
 
         self._thread = None
 
+    def reset(self):
+        self.__init__(self.vertices, self.edges)
+
     def build_adj(self, directed):
         adj = {v.name: set() for v in self.vertices}
         for e in self.edges:

@@ -62,3 +62,6 @@ class PhysicsSystem:
                 v.pos[1] += vy
                 self.velocities[v][0] *= damping
                 self.velocities[v][1] *= damping
+
+    def reset(self):
+        self.__init__(self.vertices, self.edges)

@@ -16,6 +16,9 @@ mpl.rcParams.update({
 
 _surface_cache = {}
 
+def clear_math_surface_cache():
+    _surface_cache.clear()
+
 def wrap_trailing_index(name):
     return re.sub(r'_(\d+)$', r'_{\1}', name)
 

@@ -166,87 +166,101 @@ def rebuild_edge_lookup(edges):
 
 def duplicate_graph(og_vertices, og_edges, spacing=(50, 50), times=1):
     """
-    Duplicates the original graph `times` times by laying out copies in a grid of cells
-    determined by the graph's bounding box and the given spacing.
-    - spacing: (horizontal_spacing, vertical_spacing) between cells.
+    Duplicates the original graph `times` times in a grid layout,
+    avoiding overlap and off-screen placement.
     """
     screen_rect = pygame.display.get_surface().get_rect()
 
-    # Compute bounding box of the original graph
-    xs = [v.pos[0] for v in og_vertices]
-    ys = [v.pos[1] for v in og_vertices]
-    min_x, max_x = min(xs), max(xs)
-    min_y, max_y = min(ys), max(ys)
-    graph_w = max_x - min_x
-    graph_h = max_y - min_y
-    cell_w = graph_w + spacing[0]
-    cell_h = graph_h + spacing[1]
+    total_vertices_needed = len(og_vertices) * times
+    total_vertices_available = VERTEX_LIMIT - len(og_vertices)
+    if total_vertices_needed > total_vertices_available:
+        print(f"[INFO] Duplication cancelled: {total_vertices_needed} vertices needed exceeds available {total_vertices_available}.")
+        return False
 
-    # Determine how many columns fit on screen
-    max_cols = max(1, screen_rect.width // cell_w)
+    def get_bounding_box_padding():
+        xs = [v.pos[0] for v in og_vertices]
+        ys = [v.pos[1] for v in og_vertices]
+        return (max(xs) - min(xs)) + spacing[0], (max(ys) - min(ys)) + spacing[1]
 
-    all_new_vertices = []
-    all_new_edges = []
-    existing_names = {v.name for v in og_vertices}
-    base_vertices = list(og_vertices)
-    base_edges = list(og_edges)
+    def is_valid_placement(candidate_positions):
+        return (
+            is_clear_position(og_vertices + all_new_vertices, candidate_positions)
+            and is_within_screen_margin(candidate_positions, screen_rect, *spacing)
+        )
 
-    for i in range(times):
+    def get_fallback_offset_positions():
+        fallback_offsets = [
+            (-cell_w, 0), (0, -cell_h), (-cell_w, -cell_h),
+            (cell_w, -cell_h), (-cell_w, cell_h),
+            (0, 2 * cell_h), (2 * cell_w, 0), (-2 * cell_w, 0)
+        ]
+        for fx, fy in fallback_offsets:
+            fallback = [(v.pos[0] + fx, v.pos[1] + fy) for v in og_vertices]
+            if is_valid_placement(fallback):
+                print(f"[INFO] Using fallback offset ({fx},{fy}) for duplicate #{i + 1}")
+                return fx, fy, fallback
+        return None, None, None
 
-        # Enforce maximum vertex count
-        if len(og_vertices) + len(all_new_vertices) > VERTEX_LIMIT:
-            print(f"[INFO] Duplication would exceed {VERTEX_LIMIT} vertex limit. Aborting further duplicates.")
-            break
-        # Calculate grid cell for this duplicate (skip cell 0,0 reserved for original)
-        col = (i + 1) % max_cols
-        row = (i + 1) // max_cols
-        dx = cell_w * col
-        dy = cell_h * row
-
-        # Proposed positions for the new copy
-        candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in base_vertices]
-
-        # Skip if it would overlap or be too far off-screen
-        if not (is_clear_position(og_vertices + all_new_vertices, candidate_positions)
-                and is_within_screen_margin(candidate_positions, screen_rect, spacing[0], spacing[1])):
-            print(f"[INFO] Skipping duplication #{i+1} — cell ({col},{row}) not available.")
-            continue
-
-        # Create duplicated vertices with new unique names
+    def create_unique_vertices(dx, dy):
         name_map = {}
         new_vertices = []
-        for v in base_vertices:
-            base, _ = get_base_and_index(v.name)
-            used_suffixes = {get_base_and_index(n)[1] for n in existing_names if get_base_and_index(n)[0] == base}
+        base_suffix_cache = {}
+        for v in og_vertices:
+            if v.name not in base_suffix_cache:
+                base, _ = get_base_and_index(v.name)
+                used = {get_base_and_index(n)[1] for n in existing_names if get_base_and_index(n)[0] == base}
+                base_suffix_cache[v.name] = (base, used)
+
+            base, used_suffixes = base_suffix_cache[v.name]
             new_index = 2
             while new_index in used_suffixes:
                 new_index += 1
+            used_suffixes.add(new_index)
+
             new_name = f"{base}_{new_index}"
             existing_names.add(new_name)
             new_pos = [v.pos[0] + dx, v.pos[1] + dy]
             dup = Vertex(new_pos, new_name)
             name_map[v.name] = dup
             new_vertices.append(dup)
+        return name_map, new_vertices
 
-        # Create duplicated edges between the new vertices
-        new_edges = [
-            Edge(name_map[e.start.name], name_map[e.end.name], e.value)
-            for e in base_edges
-        ]
+    def create_edges(name_map):
+        return [Edge(name_map[e.start.name], name_map[e.end.name], e.value) for e in og_edges]
+
+    cell_w, cell_h = get_bounding_box_padding()
+    max_cols = max(1, screen_rect.width // cell_w)
+
+    all_new_vertices, all_new_edges = [], []
+    existing_names = {v.name for v in og_vertices}
+
+    for i in range(times):
+        col, row = (i + 1) % max_cols, (i + 1) // max_cols
+        dx, dy = cell_w * col, cell_h * row
+        candidate_positions = [(v.pos[0] + dx, v.pos[1] + dy) for v in og_vertices]
+
+        if not is_valid_placement(candidate_positions):
+            dx, dy, candidate_positions = get_fallback_offset_positions()
+            if candidate_positions is None:
+                print(f"[INFO] Skipping duplication #{i + 1} — no nearby space.")
+                continue
+
+        name_map, new_vertices = create_unique_vertices(dx, dy)
+        new_edges = create_edges(name_map)
 
         all_new_vertices.extend(new_vertices)
         all_new_edges.extend(new_edges)
 
-
-    # Append all the new copies to the original lists
     og_vertices.extend(all_new_vertices)
     og_edges.extend(all_new_edges)
     return True
 
 
+
 def apply_graph_complement(vertices, edges, directed=False):
-    """Replace edges with their complement."""
+    """Replace edges with their complement, unless it exceeds EDGE_LIMIT."""
     name_to_vertex = {v.name: v for v in vertices}
+
     all_pairs = {
         (a.name, b.name)
         for i, a in enumerate(vertices)
@@ -258,6 +272,14 @@ def apply_graph_complement(vertices, edges, directed=False):
     if not directed:
         existing |= {(e.end.name, e.start.name) for e in edges}
 
+    # Count how many complement edges would be created
+    num_new_edges = len(all_pairs - existing)
+
+    if num_new_edges > EDGE_LIMIT:
+        print(f"[INFO] Complement aborted: {num_new_edges} edges would exceed the limit of {EDGE_LIMIT}.")
+        return
+
+    # Now safe to proceed
     new_edges = [
         Edge(name_to_vertex[a], name_to_vertex[b])
         for a, b in all_pairs
@@ -265,3 +287,5 @@ def apply_graph_complement(vertices, edges, directed=False):
     ]
 
     edges[:] = new_edges
+
+
