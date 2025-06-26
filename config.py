@@ -44,6 +44,7 @@ TOGGLE_DIRECTED_RECT, x = next_button("Directed: OFF", x, y)
 DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
 COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
 CLEAR_BUTTON_RECT, x = next_button("Clear", x, y)
+RANDOM_BUTTON_RECT, x = next_button("Random", x, y)
 
 # Optional: Slider below Duplicate
 DUPLICATE_SLIDER_RECT = pygame.Rect(
@@ -55,7 +56,7 @@ DUPLICATE_SLIDER_RECT = pygame.Rect(
 
 
 VERTEX_LIMIT = 75
-EDGE_LIMIT = 300
+EDGE_LIMIT = 150
 # Colors to avoid (RGB)
 AVOID_COLORS = [
     (100, 149, 237),  # VERTEX_COLOR

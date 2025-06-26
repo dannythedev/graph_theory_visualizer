@@ -223,7 +223,15 @@ class AStarSolver(GraphAlgorithm):
         if v1 and v2 and hasattr(v1, 'pos') and hasattr(v2, 'pos'):
             x1, y1 = v1.pos
             x2, y2 = v2.pos
-            return math.hypot(x2 - x1, y2 - y1)
+            distance = math.hypot(x2 - x1, y2 - y1)
+
+            try:
+                weights = [float(e.value) if e.value is not None else 1.0 for e in self.edges]
+                avg_weight = sum(weights) / len(weights)
+            except:
+                avg_weight = 1.0
+
+            return distance / avg_weight  # Scaled heuristic
         return 0
 
     def run(self, source_name, target_name=None, directed=False):

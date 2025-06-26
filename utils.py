@@ -2,7 +2,7 @@ import colorsys
 import re
 from string import ascii_uppercase
 from config import AVOID_COLORS, VERTEX_RADIUS, DEBUG_FONT
-
+import pygame
 
 def dfs_stack(adj, start, visited):
     """Iterative DFS to visit all reachable nodes from `start`."""
@@ -162,3 +162,73 @@ def deduplicate_edges_for_undirected(edges):
             seen.add(key)
             new_edges.append(edge)
     edges[:] = new_edges  # Update the list in-place
+
+
+def generate_random_graph(vertices, edges, name_iter, min_v=5, max_v=24, min_e=5, max_e=30):
+    from graph import Vertex, Edge  # Already imported
+    import random
+
+    vertices.clear()
+    edges.clear()
+
+    n = random.randint(min_v, max_v)
+    max_possible_edges = n * (n - 1) // 2
+    m = min(random.randint(min_e, max_e), max_possible_edges)
+
+    screen_rect = pygame.display.get_surface().get_rect()
+
+    # Define a central region (half the screen size)
+    graph_width = screen_rect.width // 2
+    graph_height = screen_rect.height // 2
+
+    # Center the graph within the screen
+    left = (screen_rect.width - graph_width) // 2
+    top = (screen_rect.height - graph_height) // 2
+    right = left + graph_width
+    bottom = top + graph_height
+
+    # Generate vertices with spacing
+    attempts = 0
+    max_attempts = 500  # Prevent infinite loops
+
+    while len(vertices) < n and attempts < max_attempts:
+        name = get_next_available_vertex_name(vertices, name_iter)
+        x = random.randint(left, right)
+        y = random.randint(top, bottom)
+
+        candidate = [(x, y)]
+        if is_clear_position(vertices, candidate):
+            vertices.append(Vertex([x, y], name))
+        attempts += 1
+
+    if len(vertices) < n:
+        print(f"[WARN] Only placed {len(vertices)} of {n} requested vertices due to spacing limits.")
+
+    # Build all potential edges (undirected)
+    potential_edges = [
+        (a, b) for i, a in enumerate(vertices) for b in vertices[i + 1:]
+    ]
+    random.shuffle(potential_edges)
+
+    # Step 1: Build a random spanning tree (ensures connectivity)
+    connected = set()
+    unconnected = set(vertices)
+    current = unconnected.pop()
+    connected.add(current)
+
+    while unconnected:
+        next_v = unconnected.pop()
+        target = random.choice(list(connected))
+        weight = str(random.randint(1, 99))
+        edges.append(Edge(target, next_v, value=weight))
+        connected.add(next_v)
+
+    # Step 2: Add remaining random edges, avoiding duplicates
+    edge_set = {(min(e.start.name, e.end.name), max(e.start.name, e.end.name)) for e in edges}
+    for a, b in potential_edges:
+        key = (min(a.name, b.name), max(a.name, b.name))
+        if key not in edge_set:
+            edges.append(Edge(a, b, value=str(random.randint(1, 99))))
+            edge_set.add(key)
+        if len(edges) >= m:
+            break

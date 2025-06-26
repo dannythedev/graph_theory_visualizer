@@ -10,7 +10,7 @@ from math_text import clear_math_surface_cache
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
 from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps, \
-    deduplicate_edges_for_undirected
+    deduplicate_edges_for_undirected, generate_random_graph
 from zoom_manager import ZoomManager
 
 def save_graph(vertices, edges, directed=False, show_weights=False, filename="graph.json"):
@@ -226,10 +226,10 @@ def handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostic
         return True, directed_state, show_weights
 
     elif SELECT_ST_BUTTON_RECT.collidepoint(pos):
-        return True, directed_state, show_weights
+        return True, directed_state, True
 
     elif CLEAR_BUTTON_RECT.collidepoint(pos):
-        return "reset", directed_state
+        return "reset", directed_state, show_weights
     return False, directed_state, show_weights
 
 def main():
@@ -299,6 +299,7 @@ def main():
         clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
         complement_hovered = COMPLEMENT_BUTTON_RECT.collidepoint(pos)
         duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
+        random_hovered = RANDOM_BUTTON_RECT.collidepoint(pos)
 
         draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
         toggle_text = "Directed: ON" if directed else "Directed: OFF"
@@ -308,6 +309,7 @@ def main():
         draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
         draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
         draw_button(screen, COMPLEMENT_BUTTON_RECT, "Complement", complement_hovered)
+        draw_button(screen, RANDOM_BUTTON_RECT, "Random", random_hovered)
 
         st_hovered = SELECT_ST_BUTTON_RECT.collidepoint(pos)
         st_text = "Select S/T" if not (
@@ -368,8 +370,6 @@ def main():
                                 input_target.value = str(int(input_text)) if input_text else None
                             except ValueError:
                                 input_target.value = None
-                            if input_text:
-                                mark_all_algorithms_dirty(algorithms)
                         input_mode = None
                         input_text = ""
                         mark_all_problems_dirty(np_problems)
@@ -449,13 +449,23 @@ def main():
                     diagnostics.mark_dirty()
                     continue
 
-                elif LOAD_BUTTON_RECT.collidepoint(pos):
+                elif RANDOM_BUTTON_RECT.collidepoint(pos):
+                    vertex_names = iter(string.ascii_uppercase)
+                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    source_vertex, target_vertex = None, None
+                    selecting_st_mode = False  # optional if you want to cancel selection mode
+                    generate_random_graph(vertices, edges, vertex_names)
+                    mark_all_problems_dirty(np_problems)
+                    mark_all_algorithms_dirty(algorithms)
+                    diagnostics.mark_dirty()
+                    continue
 
+                elif LOAD_BUTTON_RECT.collidepoint(pos):
                     reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
                     source_vertex, target_vertex = None, None
                     selecting_st_mode = False
 
-                    vertex_names, loaded_directed, show_weights = load_graph("graph.json", vertices, edges)
+                    vertex_names, directed, show_weights = load_graph("graph.json", vertices, edges)
                     mark_all_problems_dirty(np_problems)
                     mark_all_algorithms_dirty(algorithms)
                     diagnostics.mark_dirty()
@@ -507,7 +517,6 @@ def main():
                         input_mode = 'edge'
                         input_target = clicked_edge
                         input_text = clicked_edge.value or "1"
-                        mark_all_algorithms_dirty(algorithms)
                         show_weights = True
                     continue
 
