@@ -27,14 +27,32 @@ FONT = pygame.font.SysFont("Segoe UI", 13, bold=True)
 INPUT_FONT = pygame.font.SysFont("consolas", 16, bold=True)
 DEBUG_FONT = pygame.font.SysFont("consolas", 16)
 
-SAVE_BUTTON_RECT = pygame.Rect(10, 10, 70, 32)
-LOAD_BUTTON_RECT = pygame.Rect(90, 10, 70, 32)
-K_INPUT_BOX_RECT = pygame.Rect(170, 10, 50, 32)
-TOGGLE_DIRECTED_RECT = pygame.Rect(230, 10, 100, 32)
-DUPLICATE_BUTTON_RECT = pygame.Rect(350, 10, 128, 16)
-DUPLICATE_SLIDER_RECT = pygame.Rect(350, 28, 128, 12)
-COMPLEMENT_BUTTON_RECT = pygame.Rect(488, 10, 95, 32)
-CLEAR_BUTTON_RECT = pygame.Rect(593, 10, 70, 32)
+def next_button(label, x, y, padding=12, height=32):
+    """Create a button rect based on the label, starting at (x, y)."""
+    width = FONT.render(label, True, (0, 0, 0)).get_width() + 2 * padding
+    rect = pygame.Rect(x, y, width, height)
+    return rect, x + width + 10  # Return new rect and next x-position
+
+x = 10
+y = 10
+
+SAVE_BUTTON_RECT, x = next_button("Save", x, y)
+LOAD_BUTTON_RECT, x = next_button("Load", x, y)
+K_INPUT_BOX_RECT, x = next_button("k=3", x, y)
+SELECT_ST_BUTTON_RECT, x = next_button("Select S/T", x, y)
+TOGGLE_DIRECTED_RECT, x = next_button("Directed: OFF", x, y)
+DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
+COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
+CLEAR_BUTTON_RECT, x = next_button("Clear", x, y)
+
+# Optional: Slider below Duplicate
+DUPLICATE_SLIDER_RECT = pygame.Rect(
+    DUPLICATE_BUTTON_RECT.x,
+    DUPLICATE_BUTTON_RECT.bottom + 4,
+    DUPLICATE_BUTTON_RECT.width,
+    12
+)
+
 
 VERTEX_LIMIT = 75
 EDGE_LIMIT = 300

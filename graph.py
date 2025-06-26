@@ -38,7 +38,7 @@ class Edge:
         self.value = value
         self.highlight = False
 
-    def draw(self, screen, directed=False, offset_angle=0):
+    def draw(self, screen, directed=False, offset_angle=0, show_weight=False):
         color = EDGE_HOVER_COLOR if self.highlight else EDGE_COLOR
         x1, y1 = self.start.pos
         x2, y2 = self.end.pos
@@ -54,28 +54,28 @@ class Edge:
             y2 += offset * math.cos(angle + offset_angle)
 
         pygame.draw.line(screen, color, (x1, y1), (x2, y2), 2)
+        if show_weight:
+            if self.value:
+                # Midpoint of the edge
+                mid_x = (x1 + x2) / 2
+                mid_y = (y1 + y2) / 2
 
-        if self.value:
-            # Midpoint of the edge
-            mid_x = (x1 + x2) / 2
-            mid_y = (y1 + y2) / 2
+                # Compute perpendicular offset (normal vector)
+                normal_len = 15  # pixels away from the line
+                nx = -dy
+                ny = dx
+                length = math.hypot(nx, ny)
+                if length != 0:
+                    nx /= length
+                    ny /= length
 
-            # Compute perpendicular offset (normal vector)
-            normal_len = 15  # pixels away from the line
-            nx = -dy
-            ny = dx
-            length = math.hypot(nx, ny)
-            if length != 0:
-                nx /= length
-                ny /= length
+                # Apply the perpendicular offset
+                label_offset_x = mid_x + nx * normal_len
+                label_offset_y = mid_y + ny * normal_len
 
-            # Apply the perpendicular offset
-            label_offset_x = mid_x + nx * normal_len
-            label_offset_y = mid_y + ny * normal_len
-
-            label = get_math_surface(str(self.value), color)
-            rect = label.get_rect(center=(label_offset_x, label_offset_y))
-            screen.blit(label, rect)
+                label = get_math_surface(str(self.value), color)
+                rect = label.get_rect(center=(label_offset_x, label_offset_y))
+                screen.blit(label, rect)
 
         if directed:
             self._draw_arrowhead(screen, x1, y1, x2, y2, color)
@@ -281,7 +281,7 @@ def apply_graph_complement(vertices, edges, directed=False):
 
     # Now safe to proceed
     new_edges = [
-        Edge(name_to_vertex[a], name_to_vertex[b])
+        Edge(name_to_vertex[a], name_to_vertex[b], value="1")
         for a, b in all_pairs
         if (a, b) not in existing
     ]

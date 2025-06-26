@@ -151,3 +151,14 @@ def draw_fps(screen, clock):
     fps = int(clock.get_fps())
     text = DEBUG_FONT.render(f"{fps} FPS", True, (150, 255, 150))
     screen.blit(text, text.get_rect(bottomright=(screen.get_width()-20, screen.get_height()-5)))
+
+def deduplicate_edges_for_undirected(edges):
+    seen = set()
+    new_edges = []
+    for edge in edges:
+        u, v = edge.start, edge.end
+        key = tuple(sorted([u.name, v.name]))
+        if key not in seen:
+            seen.add(key)
+            new_edges.append(edge)
+    edges[:] = new_edges  # Update the list in-place

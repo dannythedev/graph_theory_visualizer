@@ -2,23 +2,25 @@ import math
 import sys
 import string
 import json
+from algorithms import get_all_algorithms, mark_all_algorithms_dirty
 from diagnostics import GraphDiagnostics
 from config import *
 from graph import Vertex, Edge, get_vertex_at_pos, get_edge_at_pos, duplicate_graph, apply_graph_complement
 from math_text import clear_math_surface_cache
 from physics import PhysicsSystem
 from np_problems import get_all_problems, mark_all_problems_dirty
-from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps
+from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps, \
+    deduplicate_edges_for_undirected
 from zoom_manager import ZoomManager
 
-def save_graph(vertices, edges, directed=False, filename="graph.json"):
+def save_graph(vertices, edges, directed=False, show_weights=False, filename="graph.json"):
     with open(filename, "w") as f:
         json.dump({
             "directed": directed,
+            "show_weights": show_weights,
             "vertices": [{"name": v.name, "pos": v.pos} for v in vertices],
             "edges": [{"start": e.start.name, "end": e.end.name, "value": e.value} for e in edges]
         }, f)
-
 
 def load_graph(filename, vertices, edges):
     try:
@@ -26,9 +28,10 @@ def load_graph(filename, vertices, edges):
             data = json.load(f)
 
         if "vertices" not in data or "edges" not in data:
-            raise ValueError("Invalid file format: missing 'vertices' or 'edges'.")
+            raise ValueError("Invalid file format")
 
-        directed = data.get("directed", False)  # default to False for backward compatibility
+        directed = data.get("directed", False)
+        show_weights = data.get("show_weights", False)
 
         name_map = {
             v["name"]: Vertex(v["pos"], v["name"])
@@ -39,21 +42,22 @@ def load_graph(filename, vertices, edges):
         vertices.extend(name_map.values())
         edges.clear()
         edges.extend(
-            Edge(name_map[e["start"]], name_map[e["end"]], e.get("value"))
+            Edge(name_map[e["start"]], name_map[e["end"]], str(e.get("value")) if e.get("value") is not None else None)
             for e in data["edges"]
         )
 
-        return iter(name for name in string.ascii_uppercase if name not in name_map), directed
+        return iter(name for name in string.ascii_uppercase if name not in name_map), directed, show_weights
 
     except Exception as e:
         print(f"[ERROR] Failed to load graph from '{filename}': {e}")
-        return iter(string.ascii_uppercase), False
+        return iter(string.ascii_uppercase), False, False
 
-
-def draw_button(screen, rect, text, hovered):
-    pygame.draw.rect(screen, BUTTON_HOVER_COLOR if hovered else BUTTON_COLOR, rect, border_radius=8)
+def draw_button(screen, rect, text, hovered, override_color=None):
+    color = override_color if override_color else (BUTTON_HOVER_COLOR if hovered else BUTTON_COLOR)
+    pygame.draw.rect(screen, color, rect, border_radius=8)
     label = FONT.render(text, True, BUTTON_TEXT_COLOR)
     screen.blit(label, label.get_rect(center=rect.center))
+
 
 def is_over_slider_knob(mouse_pos, duplicate_count, SLIDER_MIN, SLIDER_MAX):
     slider_x = DUPLICATE_SLIDER_RECT.x
@@ -155,7 +159,7 @@ def apply_bipartite_highlight(np_problems, vertices, directed):
                 apply_kcolor_highlight(solver, hovered=True, vertices=vertices)
             break
 
-def also_highlight_edges(hovered_problem, members, edges):
+def highlight_edges(hovered_problem, members, edges):
     # 2) If this is a path/cycle problem, also highlight the path edges
     name = hovered_problem.name
     if name in ("HAMPATH", "HAMCYCLE", "LONGEST-PATH") and len(members) > 1:
@@ -173,8 +177,14 @@ def also_highlight_edges(hovered_problem, members, edges):
                 if {edge.start.name, edge.end.name} == {u, v}:
                     edge.highlight = True
 
+def highlight_edges_for_algorithms(members, edges):
+    members = [item for item in members if isinstance(item, tuple)]
+    for u, v in members:
+        for edge in edges:
+            if {edge.start.name, edge.end.name} == {u, v}:
+                edge.highlight = True
 
-def reset_all(vertices, edges, np_problems, diagnostics, physics):
+def reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics):
     # Clear vertex and edge containers
     vertices.clear()
     edges.clear()
@@ -186,44 +196,41 @@ def reset_all(vertices, edges, np_problems, diagnostics, physics):
     # Reset all NP problems
     for problem in np_problems:
         problem.reset()
+    for algorithm in algorithms:
+        algorithm.source = None
+        algorithm.target = None
+        algorithm.reset()
+    return None, None
 
-
-def handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed_state, duplicate_count, physics):
+def handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed_state, duplicate_count, physics, show_weights):
     """
     Handles clicks on top-row buttons.
     Returns: (handled: bool, new_directed: bool)
     """
     if SAVE_BUTTON_RECT.collidepoint(pos):
-        save_graph(vertices, edges, directed_state)
-        return True, directed_state
-
-    elif LOAD_BUTTON_RECT.collidepoint(pos):
-        vertex_names, loaded_directed = load_graph("graph.json", vertices, edges)
-        mark_all_problems_dirty(np_problems)
-        diagnostics.mark_dirty()
-        return True, loaded_directed
+        save_graph(vertices, edges, directed_state, show_weights=show_weights)
+        return True, directed_state, show_weights
 
     elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
         if duplicate_graph(vertices, edges, times=duplicate_count):
             mark_all_problems_dirty(np_problems)
+            mark_all_algorithms_dirty(algorithms)
             diagnostics.mark_dirty()
-        return True, directed_state
+        return True, directed_state, show_weights
 
     elif COMPLEMENT_BUTTON_RECT.collidepoint(pos):
         apply_graph_complement(vertices, edges, directed_state)
         mark_all_problems_dirty(np_problems)
+        mark_all_algorithms_dirty(algorithms)
         diagnostics.mark_dirty()
-        return True, directed_state
+        return True, directed_state, show_weights
 
-
+    elif SELECT_ST_BUTTON_RECT.collidepoint(pos):
+        return True, directed_state, show_weights
 
     elif CLEAR_BUTTON_RECT.collidepoint(pos):
-        reset_all(vertices, edges, np_problems, diagnostics, physics)
-        return True, directed_state
-
-    return False, directed_state
-
-
+        return "reset", directed_state
+    return False, directed_state, show_weights
 
 def main():
     pygame.init()
@@ -254,10 +261,16 @@ def main():
     slider_dragging = False
 
     np_problems = get_all_problems(vertices, edges)
+    algorithms = get_all_algorithms(vertices, edges)
+
     diagnostics = GraphDiagnostics(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
     drag_start_pos = None
     DRAG_THRESHOLD = 5  # Minimum pixels before treating as a drag
+    source_vertex = None
+    target_vertex = None
+    selecting_st_mode = False
+    show_weights = False
 
     def logic_all_buttons():
         return not hovered_vertex and not hovered_edge and not (
@@ -267,15 +280,14 @@ def main():
                 TOGGLE_DIRECTED_RECT.collidepoint(pos) or
                 CLEAR_BUTTON_RECT.collidepoint(pos) or
                 DUPLICATE_BUTTON_RECT.collidepoint(pos) or
-                COMPLEMENT_BUTTON_RECT.collidepoint(pos))
-
-
+                COMPLEMENT_BUTTON_RECT.collidepoint(pos) or
+                SELECT_ST_BUTTON_RECT.collidepoint(pos))
 
     def draw_edges_and_vertices():
         for edge in edges:
             is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
             offset = math.pi / 18 if is_opposite and directed else 0
-            edge.draw(screen, directed=directed, offset_angle=offset)
+            edge.draw(screen, directed=directed, offset_angle=offset, show_weight=show_weights)
 
         for vertex in vertices:
             vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
@@ -287,6 +299,7 @@ def main():
         clear_hovered = CLEAR_BUTTON_RECT.collidepoint(pos)
         complement_hovered = COMPLEMENT_BUTTON_RECT.collidepoint(pos)
         duplicate_hovered = DUPLICATE_BUTTON_RECT.collidepoint(pos)
+
         draw_slider(screen, duplicate_count, SLIDER_MIN, SLIDER_MAX)
         toggle_text = "Directed: ON" if directed else "Directed: OFF"
         draw_button(screen, TOGGLE_DIRECTED_RECT, toggle_text, toggle_hovered)
@@ -295,6 +308,13 @@ def main():
         draw_button(screen, CLEAR_BUTTON_RECT, "Clear", clear_hovered)
         draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
         draw_button(screen, COMPLEMENT_BUTTON_RECT, "Complement", complement_hovered)
+
+        st_hovered = SELECT_ST_BUTTON_RECT.collidepoint(pos)
+        st_text = "Select S/T" if not (
+                    source_vertex and target_vertex) else f"S/T: {source_vertex.name},{target_vertex.name}"
+        st_override = (90, 90, 90) if selecting_st_mode else None
+        draw_button(screen, SELECT_ST_BUTTON_RECT, st_text, st_hovered, override_color=st_override)
+
 
     while True:
         screen.fill(BACKGROUND_COLOR)
@@ -327,6 +347,7 @@ def main():
                         if new_k is not None:
                             k_value = new_k
                             mark_all_problems_dirty(np_problems)
+                            mark_all_algorithms_dirty(algorithms)
                             diagnostics.mark_dirty()
 
                         k_input_active = False
@@ -343,10 +364,16 @@ def main():
                         if input_mode == 'vertex' and input_text and all(v.name != input_text for v in vertices):
                             input_target.name = input_text
                         elif input_mode == 'edge':
-                            input_target.value = input_text or None
+                            try:
+                                input_target.value = str(int(input_text)) if input_text else None
+                            except ValueError:
+                                input_target.value = None
+                            if input_text:
+                                mark_all_algorithms_dirty(algorithms)
                         input_mode = None
                         input_text = ""
                         mark_all_problems_dirty(np_problems)
+                        mark_all_algorithms_dirty(algorithms)
                         diagnostics.mark_dirty()
 
                     elif event.key == pygame.K_BACKSPACE:
@@ -354,8 +381,11 @@ def main():
                     elif event.key == pygame.K_ESCAPE:
                         input_mode = None
                         input_text = ""
-                    else:
+                    elif input_mode == "edge" and (event.unicode.isdigit() or (event.unicode == '-' and input_text == '')):
                         input_text += event.unicode
+                    elif input_mode == "vertex":
+                        input_text += event.unicode
+
 
             elif event.type == pygame.MOUSEBUTTONDOWN and not input_mode:
                 pos = event.pos
@@ -374,6 +404,22 @@ def main():
                     if not hovered_vertex and not hovered_edge and not DUPLICATE_SLIDER_RECT.collidepoint(pos):
                         panning = True
                         last_mouse_pos = pos
+
+                    if selecting_st_mode and hovered_vertex:
+                        if not source_vertex:
+                            source_vertex = hovered_vertex
+                        elif hovered_vertex != source_vertex:
+                            target_vertex = hovered_vertex
+                            selecting_st_mode = False
+                            for alg in algorithms:
+                                alg.reset()
+                                alg.source = source_vertex.name
+                                alg.target = target_vertex.name
+                                mark_all_algorithms_dirty(algorithms)
+                            continue
+                        break
+
+
                 elif event.button == 2 and hovered_vertex:
                     moving_vertex = hovered_vertex
                     drag_start_pos = pos
@@ -381,20 +427,47 @@ def main():
                     scroll_drag_strength = 0.25  # Much stronger nudge
                     continue
 
-                handled, directed = handle_all_buttons(pos, vertices, edges, np_problems, diagnostics, directed,
-                                                       duplicate_count, physics)
+                handled, directed, show_weights = handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed,
+                                                       duplicate_count, physics, show_weights=show_weights)
+                if SELECT_ST_BUTTON_RECT.collidepoint(pos):
+                    selecting_st_mode = True
+                    source_vertex = None
+                    target_vertex = None
+                    continue
+
                 if K_INPUT_BOX_RECT.collidepoint(pos):
                     k_input_active = True
                     input_text = ""
                     continue
 
-                if TOGGLE_DIRECTED_RECT.collidepoint(pos):
+                elif TOGGLE_DIRECTED_RECT.collidepoint(pos):
                     directed = not directed
+                    if not directed:
+                        deduplicate_edges_for_undirected(edges)
                     mark_all_problems_dirty(np_problems)
+                    mark_all_algorithms_dirty(algorithms)
                     diagnostics.mark_dirty()
                     continue
 
-                if handled:
+                elif LOAD_BUTTON_RECT.collidepoint(pos):
+
+                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    source_vertex, target_vertex = None, None
+                    selecting_st_mode = False
+
+                    vertex_names, loaded_directed, show_weights = load_graph("graph.json", vertices, edges)
+                    mark_all_problems_dirty(np_problems)
+                    mark_all_algorithms_dirty(algorithms)
+                    diagnostics.mark_dirty()
+                    continue
+
+                if handled == "reset":
+                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    source_vertex, target_vertex = None, None
+                    selecting_st_mode = False  # optional if you want to cancel selection mode
+                    continue
+
+                elif handled:
                     continue
 
                 clicked_vertex = hovered_vertex
@@ -414,10 +487,14 @@ def main():
                     if clicked_vertex:
                         edges[:] = [e for e in edges if e.start != clicked_vertex and e.end != clicked_vertex]
                         vertices.remove(clicked_vertex)
+                        if selected_vertex == source_vertex or selected_vertex == target_vertex:
+                            source_vertex = None
+                            target_vertex = None
                         selected_vertex = None
                     elif clicked_edge:
                         edges.remove(clicked_edge)
                     mark_all_problems_dirty(np_problems)
+                    mark_all_algorithms_dirty(algorithms)
                     diagnostics.mark_dirty()
                     continue
 
@@ -429,7 +506,9 @@ def main():
                     elif clicked_edge:
                         input_mode = 'edge'
                         input_target = clicked_edge
-                        input_text = clicked_edge.value or ""
+                        input_text = clicked_edge.value or "1"
+                        mark_all_algorithms_dirty(algorithms)
+                        show_weights = True
                     continue
 
                 if clicked_vertex:
@@ -455,8 +534,9 @@ def main():
                             if len(edges) >= EDGE_LIMIT:
                                 print("[INFO] Cannot add edge: edge limit reached.")
                             else:
-                                edges.append(Edge(selected_vertex, clicked_vertex))
+                                edges.append(Edge(selected_vertex, clicked_vertex, value="1"))
                                 mark_all_problems_dirty(np_problems)
+                                mark_all_algorithms_dirty(algorithms)
                                 diagnostics.mark_dirty()
                             selected_vertex = None
                         else:
@@ -498,13 +578,12 @@ def main():
                                         vertices.append(new_vertex)
 
                                         if selected_vertex:
-                                            edges.append(Edge(selected_vertex, new_vertex))
+                                            edges.append(Edge(selected_vertex, new_vertex, value="1"))
                                             selected_vertex = None  # optionally clear selection
 
                                         mark_all_problems_dirty(np_problems)
+                                        mark_all_algorithms_dirty(algorithms)
                                         diagnostics.mark_dirty()
-
-
 
 
             elif event.type == pygame.MOUSEMOTION:
@@ -557,7 +636,18 @@ def main():
             found, members = hovered_problem.result
             if found:
                 apply_highlights(members, vertices, edges)
-                also_highlight_edges(hovered_problem, members, edges)
+                highlight_edges(hovered_problem, members, edges)
+        y+=20
+        hovered_algorithm = None
+        for alg in algorithms:
+            y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
+            if hovered:
+                hovered_algorithm = (alg, elements)
+
+        if hovered_algorithm:
+            _, elements = hovered_algorithm
+            apply_highlights(elements, vertices, edges)
+            highlight_edges_for_algorithms(elements, edges)
 
         if not input_mode:
             diagnostics.update(directed=directed)
