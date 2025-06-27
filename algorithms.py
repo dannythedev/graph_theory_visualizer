@@ -13,7 +13,7 @@ class GraphAlgorithm:
         self.result = []         # e.g., list of vertex names
         self.edge_result = []    # edge path
         self.active = False
-
+        self.requires_source_target = True
         self.source = None
         self.target = None
         self.needs_update = True
@@ -36,7 +36,7 @@ class GraphAlgorithm:
         self.source = source
         self.target = target
 
-        if self.needs_update and source and target and self._thread is None:
+        if self.needs_update and (not self.requires_source_target or (source and target)) and self._thread is None:
             self.result.clear()
             self.edge_result.clear()
             self.active = False
@@ -62,7 +62,7 @@ class GraphAlgorithm:
         else:
             st_label = "-"
 
-        if not self.source or not self.target:
+        if not self.active or (self.requires_source_target and (not self.source or not self.target)):
             result_surface = font.render("Choose S/T", True, color)
             elements = []
         elif not self._result_ready:
@@ -75,7 +75,12 @@ class GraphAlgorithm:
             result_surface = font.render("Undefined", True, color)
             elements = []
         else:
-            result_surface = get_math_surface(", ".join(self.result), color, fontsize=6)
+            if all(isinstance(x, str) for x in self.result):
+                label_text = ", ".join(self.result)
+            else:
+                label_text = ", ".join(f"({a},{b})" for a, b in self.result)
+            result_surface = get_math_surface(label_text, color, fontsize=6)
+
             elements = [(self.result[i], self.result[i + 1]) for i in range(len(self.result) - 1)]
             elements += [self.result[0], self.result[-1]]
 
@@ -290,12 +295,101 @@ class AStarSolver(GraphAlgorithm):
         self.edge_result = [(path[i], path[i + 1]) for i in range(len(path) - 1)]
         self.active = True
 
+class KruskalSolver(GraphAlgorithm):
+    def __init__(self, vertices, edges):
+        super().__init__("KRUSKAL", vertices, edges)
+        self.requires_source_target = False
+
+    def run(self, source_name=None, target_name=None, directed=False):
+        if directed:
+            self.result = []
+            self.edge_result = []
+            self.active = True
+            return
+
+        parent = {}
+        def find(v):
+            while parent[v] != v:
+                parent[v] = parent[parent[v]]
+                v = parent[v]
+            return v
+
+        def union(a, b):
+            parent[find(a)] = find(b)
+
+        for v in self.vertices:
+            parent[v.name] = v.name
+
+        edge_objs = sorted(
+            self.edges,
+            key=lambda e: float(e.value) if e.value is not None else 1.0
+        )
+
+        mst_edges = []
+        for e in edge_objs:
+            u, v = e.start.name, e.end.name
+            if find(u) != find(v):
+                mst_edges.append((u, v))
+                union(u, v)
+
+        self.result = mst_edges
+        self.edge_result = mst_edges
+        self.active = True
+
+class PrimSolver(GraphAlgorithm):
+    def __init__(self, vertices, edges):
+        super().__init__("PRIM", vertices, edges)
+        self.requires_source_target = False
+
+    def run(self, source_name=None, target_name=None, directed=False):
+        if directed or not self.vertices:
+            self.result = []
+            self.edge_result = []
+            self.active = True
+            return
+
+        from heapq import heappush, heappop
+
+        adj = {v.name: [] for v in self.vertices}
+        for e in self.edges:
+            w = float(e.value) if e.value is not None else 1.0
+            adj[e.start.name].append((w, e.end.name))
+            adj[e.end.name].append((w, e.start.name))
+
+        visited = set()
+        mst_edges = []
+
+        # Run Prim separately on each component
+        for v in self.vertices:
+            if v.name in visited:
+                continue
+
+            heap = [(0, v.name, None)]
+
+            while heap:
+                weight, current, parent = heappop(heap)
+                if current in visited:
+                    continue
+                visited.add(current)
+                if parent is not None:
+                    mst_edges.append((parent, current))
+                for w, neighbor in adj[current]:
+                    if neighbor not in visited:
+                        heappush(heap, (w, neighbor, current))
+
+        self.result = mst_edges
+        self.edge_result = mst_edges
+        self.active = True
+
+
 
 def get_all_algorithms(vertices, edges):
     return [
         DijkstraSolver(vertices, edges),
         BellmanFordSolver(vertices, edges),
-        AStarSolver(vertices, edges)
+        AStarSolver(vertices, edges),
+        KruskalSolver(vertices, edges),
+        PrimSolver(vertices, edges)
     ]
 
 def mark_all_algorithms_dirty(algorithms):

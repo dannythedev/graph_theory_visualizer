@@ -2,6 +2,7 @@ import math
 import sys
 import string
 import json
+
 from algorithms import get_all_algorithms, mark_all_algorithms_dirty
 from diagnostics import GraphDiagnostics
 from config import *
@@ -177,12 +178,17 @@ def highlight_edges(hovered_problem, members, edges):
                 if {edge.start.name, edge.end.name} == {u, v}:
                     edge.highlight = True
 
-def highlight_edges_for_algorithms(members, edges):
+def highlight_edges_for_algorithms(members, edges, directed=False):
     members = [item for item in members if isinstance(item, tuple)]
     for u, v in members:
         for edge in edges:
-            if {edge.start.name, edge.end.name} == {u, v}:
-                edge.highlight = True
+            if directed:
+                if edge.start.name == u and edge.end.name == v:
+                    edge.highlight = True
+            else:
+                if {edge.start.name, edge.end.name} == {u, v}:
+                    edge.highlight = True
+
 
 def reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics):
     # Clear vertex and edge containers
@@ -262,6 +268,9 @@ def main():
 
     np_problems = get_all_problems(vertices, edges)
     algorithms = get_all_algorithms(vertices, edges)
+    for alg in algorithms:
+        if not alg.requires_source_target:
+            alg.update(None, None, directed=False)
 
     diagnostics = GraphDiagnostics(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
@@ -415,7 +424,6 @@ def main():
                                 alg.reset()
                                 alg.source = source_vertex.name
                                 alg.target = target_vertex.name
-                                mark_all_algorithms_dirty(algorithms)
                             continue
                         break
 
@@ -627,45 +635,48 @@ def main():
                         last_mouse_pos = pos
         for v in vertices:
             v.highlight = False
-        # for e in edges:
-        #     e.highlight = False
-
-        hovered_problem = None
-        y = 60
-        for solver in np_problems:
-            y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed)
-
-            if solver.name == "k-COLORING":
-                apply_kcolor_highlight(solver, hovered, vertices)
-
-            if hovered:
-                hovered_problem = solver
-
-        if hovered_problem:
-            found, members = hovered_problem.result
-            if found:
-                apply_highlights(members, vertices, edges)
-                highlight_edges(hovered_problem, members, edges)
-        y+=20
-        hovered_algorithm = None
-        for alg in algorithms:
-            y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
-            if hovered:
-                hovered_algorithm = (alg, elements)
-
-        if hovered_algorithm:
-            _, elements = hovered_algorithm
-            apply_highlights(elements, vertices, edges)
-            highlight_edges_for_algorithms(elements, edges)
 
         if not input_mode:
-            diagnostics.update(directed=directed)
-            diagnostics.render(screen, DEBUG_FONT, pos)
-            if diagnostics.hovered_diagnostic:
-                key, elements = diagnostics.hovered_diagnostic
+            hovered_problem = None
+            y = 67
+            for solver in np_problems:
+                y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed)
+
+                if solver.name == "k-COLORING":
+                    apply_kcolor_highlight(solver, hovered, vertices)
+
+                if hovered:
+                    hovered_problem = solver
+
+            if hovered_problem:
+                found, members = hovered_problem.result
+                if found:
+                    apply_highlights(members, vertices, edges)
+                    highlight_edges(hovered_problem, members, edges)
+
+            hovered_algorithm = None
+            y_start = screen.get_height() - len(algorithms) * 20 - 15
+            y = y_start
+            for alg in algorithms:
+                y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
+                if hovered:
+                    hovered_algorithm = (alg, elements)
+
+            if hovered_algorithm:
+                _, elements = hovered_algorithm
+                if hovered_algorithm[0].name in ["PRIM", "KRUSKAL"]:
+                    elements = _.edge_result
                 apply_highlights(elements, vertices, edges)
-                if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
-                    apply_bipartite_highlight(np_problems, vertices, directed)
+                highlight_edges_for_algorithms(elements, edges)
+
+            if not input_mode:
+                diagnostics.update(directed=directed)
+                diagnostics.render(screen, DEBUG_FONT, pos)
+                if diagnostics.hovered_diagnostic:
+                    key, elements = diagnostics.hovered_diagnostic
+                    apply_highlights(elements, vertices, edges)
+                    if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
+                        apply_bipartite_highlight(np_problems, vertices, directed)
 
         draw_edges_and_vertices()
         draw_all_buttons()

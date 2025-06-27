@@ -41,9 +41,9 @@ LOAD_BUTTON_RECT, x = next_button("Load", x, y)
 K_INPUT_BOX_RECT, x = next_button("k=3", x, y)
 SELECT_ST_BUTTON_RECT, x = next_button("Select S/T", x, y)
 TOGGLE_DIRECTED_RECT, x = next_button("Directed: OFF", x, y)
-DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
-COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
 CLEAR_BUTTON_RECT, x = next_button("Clear", x, y)
+COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
+DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
 RANDOM_BUTTON_RECT, x = next_button("Random", x, y)
 
 # Optional: Slider below Duplicate

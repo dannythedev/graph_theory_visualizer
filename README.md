@@ -11,8 +11,9 @@ An intuitive, interactive tool for building, analyzing, and visualizing graphs a
 
 - 🧱 **Graph Construction** (vertices, edges, labels)
 - 🔁 **Directed / Undirected Toggle**
-- 💾 **Save / Load** to JSON
+- 💾 **Save / Load / Clear / Duplicate / Random**
 - 🧩 **Live NP Problem Solvers**
+- ⚙️ **Graph Algorithm Simulations**
 - 📊 **Real-time Graph Diagnostics**
 - 🔍 **Smart Highlighting and Color Grouping**
 - 🖱️ **Fully Mouse-Controlled UI**
@@ -22,24 +23,30 @@ An intuitive, interactive tool for building, analyzing, and visualizing graphs a
 
 ## 🖱️ Mouse + UI Controls
 
-| Action | How to Do It |
-|--------|--------------|
-| ➕ Add Vertex | Left-click on empty space |
-| 🔗 Connect Vertices | Left-click two vertices |
-| ✏️ Edit Label | Double-click on a vertex or edge |
-| ✖️️ Delete | Right-click a vertex or edge |
-| 🧲 Move Vertex | Drag with mouse |
-| 🎯 Toggle Directed Mode | Click "Directed: ON/OFF" |
-| 📈 Change `k` | Click `k=` box and type |
-| 💾 Save / Load / Clear | Use on-screen buttons |
-| 🔍 Zoom | Scroll mouse wheel |
-| 📦 Duplicate Graph | Use Duplicate button + slider |
+| Action            | How to Do It                                                                                        |
+|-------------------|-----------------------------------------------------------------------------------------------------|
+| ➕ Add Vertex      | Left-click on empty space.                                                                          |
+| 🔗 Connect Vertices | Left-click two vertices.                                                                            |
+| ✏️ Edit Label     | Double-click a vertex or edge.                                                                      |
+| ✖️ Delete         | Right-click a vertex or edge.                                                                       |
+| 🧲 Move Vertex    | Right-click and drag to move one vertex.<br/>Scroll-click and drag to move its connected group.     |
+| 🎯 Select S/T     | Click "Select S/T" and then two vertices<br/>to activate [🔍 Graph Algorithms](#-graph-algorithms). |
+| 📈 Change `k`     | Click `k=` box and type the k-value to<br/>activate [🧠 NP Problem Solvers](#-np-problem-solvers).  |
+| 💾 Save / Load / Clear | Use respective buttons to Export/Import/Clear<br/>the current Graph.                                |
+| 📦 Duplicate Graph | Use "Duplicate" button + slider to control<br/>the amount of duplications.                          |
+| 🎲 Generate Random Graph | Click "Random" button.                                                                              |
+| 🔍 Zoom           | Scroll mouse wheel.                                                                                 |
+
+---
+
+## ❗Hovering over a [🧪 Real-Time Graph Diagnostics](#-real-time-graph-diagnostics),[🔍 Graph Algorithms](#-graph-algorithms) or [🧠 NP Problem Solvers](#-np-problem-solvers) highlights relevant nodes or edges.
+
 
 ---
 
 ## 🧪 Real-Time Graph Diagnostics
 
-These update whenever the graph changes:
+These update automatically when the graph changes:
 
 | Metric | Meaning |
 |--------|---------|
@@ -51,13 +58,25 @@ These update whenever the graph changes:
 | **Bridges** | Critical edges whose removal disconnects components |
 | **Max/Min Degree** | Nodes with highest/lowest degree |
 
-Hovering over any diagnostic highlights relevant nodes or edges.
+---
+
+## 🔍 Graph Algorithms
+
+| Algorithm                 | Description |
+|---------------------------|-------------|
+| **Dijkstra’s Algorithm**  | Shortest path from a source using non-negative weights |
+| **Bellman-Ford Algorithm** | Shortest path that supports negative edge weights |
+| **A***                    | Intelligent shortest pathfinding using heuristics (Euclidean by default) |
+| **Prim’s Algorithm**      | Minimum Spanning Tree (MST) covering each connected component |
+| **Kruskal’s Algorithm**   | MST using greedy edge inclusion across components |
+
+**Note**:  
+- Algorithms requiring a source/target (Dijkstra, Bellman-Ford, A\*) prompt for S/T selection.  
+- Prim and Kruskal run automatically for all components — no S/T selection needed.  
 
 ---
 
 ## 🧠 NP Problem Solvers
-
-Live NP-complete problem checks with optional `k` input:
 
 | Problem | Description | Needs `k`? |
 |---------|-------------|------------|
@@ -79,14 +98,25 @@ Hover over *k-Coloring* to highlight color groups with beautiful, contrast-aware
 
 | File | Purpose |
 |------|---------|
-| `main.py` | UI loop, event handling, and rendering |
-| `graph.py` | Graph structure, drawing, and interaction |
-| `diagnostics.py` | Real-time graph metric calculations |
-| `np_problems.py` | Solvers for classic NP-complete problems |
-| `physics.py` | Graph layout physics (smooth dragging, nudging) |
-| `math_text.py` | Render math-style labels (LaTeX-style) |
-| `config.py` | Colors, fonts, and constants |
+| `main.py` | UI loop, event handling, rendering |
+| `graph.py` | Graph structure and drawing |
+| `diagnostics.py` | Real-time graph metrics |
+| `np_problems.py` | Classic NP problem solvers |
+| `algorithms.py` | Pathfinding and MST algorithms |
+| `physics.py` | Dragging and layout physics |
+| `math_text.py` | Renders math-style labels |
+| `zoom_manager.py` | Pan and zoom support |
+| `config.py` | Colors, fonts, constants |
+| `utils.py` | Helper functions |
 | `requirements.txt` | Dependency list |
+
+---
+
+## ⚠️ Note
+
+This tool is designed for learning and visuality. While many classic algorithms and NP solvers are included, some results may be imperfect or suboptimal. This project was built for fun.
+Great for insight — not guaranteed for proof.
+
 
 ---
 
@@ -95,7 +125,7 @@ Hover over *k-Coloring* to highlight color groups with beautiful, contrast-aware
 ### 📦 Prerequisites
 
 - Python 3.7+
-- `pygame` and `matplotlib`
+- `pygame`, `matplotlib`
 
 ### 📥 Installation
 

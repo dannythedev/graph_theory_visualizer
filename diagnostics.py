@@ -146,12 +146,12 @@ class GraphDiagnostics:
         return True
 
     def render(self, screen, font, mouse_pos=None):
-        y_start = screen.get_height() - len(self.info) * 15
+        y_start = screen.get_height() - len(self.info) * 15 - 115
         self.hovered_diagnostic = None
 
         for key, val in self.info.items():
             is_hovered = mouse_pos and pygame.Rect(10, y_start, 780, 15).collidepoint(mouse_pos)
-            color = (255, 255, 100) if is_hovered else (180, 180, 255)
+            color = (255, 255, 100) if is_hovered else (180, 180, 180)
 
             screen.blit(font.render(f"{key}:", True, color), (10, y_start))
 
