@@ -206,37 +206,64 @@ def reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics):
         algorithm.source = None
         algorithm.target = None
         algorithm.reset()
-    return None, None
+    return None, None, None
 
-def handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed_state, duplicate_count, physics, show_weights):
+def handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed_state, duplicate_count, physics, show_weights, include_algorithms, source_vertex, target_vertex, k_value, directed):
     """
     Handles clicks on top-row buttons.
     Returns: (handled: bool, new_directed: bool)
     """
+    if INCLUDE_ALGO_BUTTON_RECT.collidepoint(pos):
+        include_algorithms = not include_algorithms
+        if include_algorithms:
+            # Recompute everything now
+            for alg in algorithms:
+                alg.reset()
+                alg.update(source_vertex.name if source_vertex else None,
+                           target_vertex.name if target_vertex else None,
+                           directed=directed,
+                           compute_enabled=True)
+
+            for problem in np_problems:
+                problem.reset()
+                problem.update(k_value, directed=directed, compute_enabled=True)
+
+            diagnostics.reset()
+            diagnostics.update(directed=directed, compute_enabled=True)
+
+        else:
+            # Clear all states if turning off
+            for alg in algorithms:
+                alg.reset()
+            for problem in np_problems:
+                problem.reset()
+            diagnostics.reset()
+        return True, directed_state, show_weights, include_algorithms
+
     if SAVE_BUTTON_RECT.collidepoint(pos):
         save_graph(vertices, edges, directed_state, show_weights=show_weights)
-        return True, directed_state, show_weights
+        return True, directed_state, show_weights, include_algorithms
 
     elif DUPLICATE_BUTTON_RECT.collidepoint(pos):
         if duplicate_graph(vertices, edges, times=duplicate_count):
             mark_all_problems_dirty(np_problems)
             mark_all_algorithms_dirty(algorithms)
             diagnostics.mark_dirty()
-        return True, directed_state, show_weights
+        return True, directed_state, show_weights, include_algorithms
 
     elif COMPLEMENT_BUTTON_RECT.collidepoint(pos):
         apply_graph_complement(vertices, edges, directed_state)
         mark_all_problems_dirty(np_problems)
         mark_all_algorithms_dirty(algorithms)
         diagnostics.mark_dirty()
-        return True, directed_state, show_weights
+        return True, directed_state, show_weights, include_algorithms
 
     elif SELECT_ST_BUTTON_RECT.collidepoint(pos):
-        return True, directed_state, True
+        return True, directed_state, True, include_algorithms
 
     elif CLEAR_BUTTON_RECT.collidepoint(pos):
-        return "reset", directed_state, show_weights
-    return False, directed_state, show_weights
+        return "reset", directed_state, show_weights, include_algorithms
+    return False, directed_state, show_weights, include_algorithms
 
 def main():
     pygame.init()
@@ -266,11 +293,12 @@ def main():
     SLIDER_MAX = 9
     slider_dragging = False
 
+    include_algorithms = True
     np_problems = get_all_problems(vertices, edges)
     algorithms = get_all_algorithms(vertices, edges)
     for alg in algorithms:
         if not alg.requires_source_target:
-            alg.update(None, None, directed=False)
+            alg.update(None, None, directed=False, compute_enabled=include_algorithms)
 
     diagnostics = GraphDiagnostics(vertices, edges)
     physics = PhysicsSystem(vertices, edges)
@@ -290,7 +318,8 @@ def main():
                 CLEAR_BUTTON_RECT.collidepoint(pos) or
                 DUPLICATE_BUTTON_RECT.collidepoint(pos) or
                 COMPLEMENT_BUTTON_RECT.collidepoint(pos) or
-                SELECT_ST_BUTTON_RECT.collidepoint(pos))
+                SELECT_ST_BUTTON_RECT.collidepoint(pos) or
+                INCLUDE_ALGO_BUTTON_RECT.collidepoint(pos))
 
     def draw_edges_and_vertices():
         for edge in edges:
@@ -319,6 +348,10 @@ def main():
         draw_button(screen, DUPLICATE_BUTTON_RECT, "Duplicate", duplicate_hovered)
         draw_button(screen, COMPLEMENT_BUTTON_RECT, "Complement", complement_hovered)
         draw_button(screen, RANDOM_BUTTON_RECT, "Random", random_hovered)
+
+        include_algo_hovered = INCLUDE_ALGO_BUTTON_RECT.collidepoint(pos)
+        algo_text = f"Include Algorithms: {'ON' if include_algorithms else 'OFF'}"
+        draw_button(screen, INCLUDE_ALGO_BUTTON_RECT, algo_text, include_algo_hovered)
 
         st_hovered = SELECT_ST_BUTTON_RECT.collidepoint(pos)
         st_text = "Select S/T" if not (
@@ -435,8 +468,9 @@ def main():
                     scroll_drag_strength = 0.25  # Much stronger nudge
                     continue
 
-                handled, directed, show_weights = handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed,
-                                                       duplicate_count, physics, show_weights=show_weights)
+                handled, directed, show_weights, include_algorithms = handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostics, directed,
+                                                       duplicate_count, physics, show_weights=show_weights, include_algorithms=include_algorithms,
+                                                                                         source_vertex=source_vertex, target_vertex=target_vertex, k_value=k_value, directed=directed)
                 if SELECT_ST_BUTTON_RECT.collidepoint(pos):
                     selecting_st_mode = True
                     source_vertex = None
@@ -459,7 +493,8 @@ def main():
 
                 elif RANDOM_BUTTON_RECT.collidepoint(pos):
                     vertex_names = iter(string.ascii_uppercase)
-                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    selected_vertex, source_vertex, target_vertex = reset_all(vertices, edges, algorithms, np_problems,
+                                                                              diagnostics, physics)
                     source_vertex, target_vertex = None, None
                     selecting_st_mode = False  # optional if you want to cancel selection mode
                     generate_random_graph(vertices, edges, vertex_names)
@@ -469,7 +504,8 @@ def main():
                     continue
 
                 elif LOAD_BUTTON_RECT.collidepoint(pos):
-                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    selected_vertex, source_vertex, target_vertex = reset_all(vertices, edges, algorithms, np_problems,
+                                                                              diagnostics, physics)
                     source_vertex, target_vertex = None, None
                     selecting_st_mode = False
 
@@ -480,7 +516,8 @@ def main():
                     continue
 
                 if handled == "reset":
-                    reset_all(vertices, edges, algorithms, np_problems, diagnostics, physics)
+                    selected_vertex, source_vertex, target_vertex = reset_all(vertices, edges, algorithms, np_problems,
+                                                                              diagnostics, physics)
                     source_vertex, target_vertex = None, None
                     selecting_st_mode = False  # optional if you want to cancel selection mode
                     continue
@@ -636,47 +673,48 @@ def main():
         for v in vertices:
             v.highlight = False
 
-        if not input_mode:
-            hovered_problem = None
-            y = 67
-            for solver in np_problems:
-                y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed)
-
-                if solver.name == "k-COLORING":
-                    apply_kcolor_highlight(solver, hovered, vertices)
-
-                if hovered:
-                    hovered_problem = solver
-
-            if hovered_problem:
-                found, members = hovered_problem.result
-                if found:
-                    apply_highlights(members, vertices, edges)
-                    highlight_edges(hovered_problem, members, edges)
-
-            hovered_algorithm = None
-            y_start = screen.get_height() - len(algorithms) * 20 - 15
-            y = y_start
-            for alg in algorithms:
-                y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
-                if hovered:
-                    hovered_algorithm = (alg, elements)
-
-            if hovered_algorithm:
-                _, elements = hovered_algorithm
-                if hovered_algorithm[0].name in ["PRIM", "KRUSKAL"]:
-                    elements = _.edge_result
-                apply_highlights(elements, vertices, edges)
-                highlight_edges_for_algorithms(elements, edges)
-
+        if include_algorithms:
             if not input_mode:
-                diagnostics.update(directed=directed)
-                diagnostics.render(screen, DEBUG_FONT, pos)
-                if diagnostics.hovered_diagnostic:
-                    key, elements = diagnostics.hovered_diagnostic
+                hovered_problem = None
+                y = 67
+                for solver in np_problems:
+                    y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed, compute_enabled=include_algorithms)
+
+                    if solver.name == "k-COLORING":
+                        apply_kcolor_highlight(solver, hovered, vertices)
+
+                    if hovered:
+                        hovered_problem = solver
+
+                if hovered_problem:
+                    found, members = hovered_problem.result
+                    if found:
+                        apply_highlights(members, vertices, edges)
+                        highlight_edges(hovered_problem, members, edges)
+
+                hovered_algorithm = None
+                y_start = screen.get_height() - len(algorithms) * 20 - 15
+                y = y_start
+                for alg in algorithms:
+                    y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
+                    if hovered:
+                        hovered_algorithm = (alg, elements)
+
+                if hovered_algorithm:
+                    _, elements = hovered_algorithm
+                    if hovered_algorithm[0].name in ["PRIM", "KRUSKAL"]:
+                        elements = _.edge_result
                     apply_highlights(elements, vertices, edges)
-                    if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
-                        apply_bipartite_highlight(np_problems, vertices, directed)
+                    highlight_edges_for_algorithms(elements, edges)
+
+                if not input_mode:
+                    diagnostics.update(directed=directed, compute_enabled=include_algorithms)
+                    diagnostics.render(screen, DEBUG_FONT, pos)
+                    if diagnostics.hovered_diagnostic:
+                        key, elements = diagnostics.hovered_diagnostic
+                        apply_highlights(elements, vertices, edges)
+                        if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
+                            apply_bipartite_highlight(np_problems, vertices, directed)
 
         draw_edges_and_vertices()
         draw_all_buttons()

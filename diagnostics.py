@@ -18,45 +18,46 @@ class GraphDiagnostics:
     def mark_dirty(self):
         self.needs_update = True
 
-    def update(self, directed=False):
-        if not self.needs_update:
-            return
-        self.needs_update = False
+    def update(self, directed=False, compute_enabled=True):
+        if compute_enabled:
+            if not self.needs_update:
+                return
+            self.needs_update = False
 
-        self.adj = self._build_adj(directed)
-        self.rev_adj = self._build_adj_reverse() if directed else None
+            self.adj = self._build_adj(directed)
+            self.rev_adj = self._build_adj_reverse() if directed else None
 
 
-        # Core structure
-        self.info.clear()
-        visited = set()
-        self.info["Cyclic"] = self._has_cycle(directed, visited.copy())
-        self.info["Components"] = self._component_count(visited.copy())
+            # Core structure
+            self.info.clear()
+            visited = set()
+            self.info["Cyclic"] = self._has_cycle(directed, visited.copy())
+            self.info["Components"] = self._component_count(visited.copy())
 
-        self.info["SCCs"] = (
-            self._strongly_connected_components() if directed else self.info["Components"]
-        )
+            self.info["SCCs"] = (
+                self._strongly_connected_components() if directed else self.info["Components"]
+            )
 
-        self.info["Tree"] = not directed and not self.info["Cyclic"] and self.info["Components"] == 1
-        self.info["Forest"] = not directed and not self.info["Cyclic"]
-        self.info["Bipartite"] = self._is_bipartite() if not directed else "N/A"
+            self.info["Tree"] = not directed and not self.info["Cyclic"] and self.info["Components"] == 1
+            self.info["Forest"] = not directed and not self.info["Cyclic"]
+            self.info["Bipartite"] = self._is_bipartite() if not directed else "N/A"
 
-        # Bridges
-        self.bridges = self._find_bridges()
-        self.info["Bridges"] = (len(self.bridges), self.bridges)
+            # Bridges
+            self.bridges = self._find_bridges()
+            self.info["Bridges"] = (len(self.bridges), self.bridges)
 
-        # Degree stats
-        degrees = [(v.name, len(self.adj[v.name])) for v in self.vertices]
-        if degrees:
-            max_val = max(degrees, key=lambda x: x[1])[1]
-            min_val = min(degrees, key=lambda x: x[1])[1]
-            max_nodes = [name for name, deg in degrees if deg == max_val]
-            min_nodes = [name for name, deg in degrees if deg == min_val]
-        else:
-            max_val, min_val, max_nodes, min_nodes = 0, 0, [], []
+            # Degree stats
+            degrees = [(v.name, len(self.adj[v.name])) for v in self.vertices]
+            if degrees:
+                max_val = max(degrees, key=lambda x: x[1])[1]
+                min_val = min(degrees, key=lambda x: x[1])[1]
+                max_nodes = [name for name, deg in degrees if deg == max_val]
+                min_nodes = [name for name, deg in degrees if deg == min_val]
+            else:
+                max_val, min_val, max_nodes, min_nodes = 0, 0, [], []
 
-        self.info["Max Degree"] = (max_val, max_nodes)
-        self.info["Min Degree"] = (min_val, min_nodes)
+            self.info["Max Degree"] = (max_val, max_nodes)
+            self.info["Min Degree"] = (min_val, min_nodes)
 
     def _find_bridges(self):
         time = [0]

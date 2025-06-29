@@ -279,13 +279,18 @@ def apply_graph_complement(vertices, edges, directed=False):
         print(f"[INFO] Complement aborted: {num_new_edges} edges would exceed the limit of {EDGE_LIMIT}.")
         return
 
-    # Now safe to proceed
-    new_edges = [
+    for edge in edges:
+        edge.start = None
+        edge.end = None
+        edge.value = None
+    edges.clear()  # Remove all old edges in-place
+
+    # Now create the complement edges
+    edges.extend([
         Edge(name_to_vertex[a], name_to_vertex[b], value="1")
         for a, b in all_pairs
         if (a, b) not in existing
-    ]
+    ])
 
-    edges[:] = new_edges
 
 

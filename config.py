@@ -45,6 +45,7 @@ CLEAR_BUTTON_RECT, x = next_button("Clear", x, y)
 COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
 DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
 RANDOM_BUTTON_RECT, x = next_button("Random", x, y)
+INCLUDE_ALGO_BUTTON_RECT, x = next_button("Include Algorithms: ON", x, y)
 
 # Optional: Slider below Duplicate
 DUPLICATE_SLIDER_RECT = pygame.Rect(

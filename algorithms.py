@@ -29,21 +29,22 @@ class GraphAlgorithm:
         self._thread = None
         self._result_ready = False
 
-    def update(self, source, target, directed=False):
-        if source != self.source or target != self.target:
-            self.needs_update = True
+    def update(self, source, target, directed=False, compute_enabled=True):
+        if compute_enabled:
+            if source != self.source or target != self.target:
+                self.needs_update = True
 
-        self.source = source
-        self.target = target
+            self.source = source
+            self.target = target
 
-        if self.needs_update and (not self.requires_source_target or (source and target)) and self._thread is None:
-            self.result.clear()
-            self.edge_result.clear()
-            self.active = False
-            self.needs_update = False
-            self._result_ready = False
-            self._thread = threading.Thread(target=self._run_thread, args=(source, target, directed))
-            self._thread.start()
+            if self.needs_update and (not self.requires_source_target or (source and target)) and self._thread is None:
+                self.result.clear()
+                self.edge_result.clear()
+                self.active = False
+                self.needs_update = False
+                self._result_ready = False
+                self._thread = threading.Thread(target=self._run_thread, args=(source, target, directed))
+                self._thread.start()
 
     def _run_thread(self, source, target, directed):
         self.run(source, target, directed)

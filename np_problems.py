@@ -56,18 +56,19 @@ class NPProblem:
             self.edge_members = []
         self.needs_update = False
 
-    def update(self, k, directed=False):
-        if self.k != k:
-            self.needs_update = True
-        if self.needs_update:
-            self.k = k
-            self.result = (None, [])
-            self.needs_update = False
-            self._thread = threading.Thread(target=self._run_compute_thread, args=(k, directed))
-            self._thread.start()
+    def update(self, k, directed=False, compute_enabled=True):
+        if compute_enabled:
+            if self.k != k:
+                self.needs_update = True
+            if self.needs_update:
+                self.k = k
+                self.result = (None, [])
+                self.needs_update = False
+                self._thread = threading.Thread(target=self._run_compute_thread, args=(k, directed))
+                self._thread.start()
 
-    def render_debug(self, screen, font, k, y, mouse_pos, directed):
-        self.update(k, directed)
+    def render_debug(self, screen, font, k, y, mouse_pos, directed, compute_enabled=True):
+        self.update(k, directed, compute_enabled=compute_enabled)
         found, members = self.result
 
         # Check hover over row
