@@ -328,7 +328,11 @@ def main():
             edge.draw(screen, directed=directed, offset_angle=offset, show_weight=show_weights)
 
         for vertex in vertices:
-            vertex.draw(screen, selected=(vertex == selected_vertex), hovered=(vertex == hovered_vertex))
+            is_st = vertex == source_vertex or vertex == target_vertex
+            vertex.draw(screen,
+                        selected=(vertex == selected_vertex),
+                        hovered=(vertex == hovered_vertex),
+                        st_highlight=is_st)
 
     def draw_all_buttons():
         save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)

@@ -11,13 +11,23 @@ class Vertex:
         self.highlight = False
         self.custom_color = custom_color
 
-    def draw(self, screen, selected=False, hovered=False):
+    def draw(self, screen, selected=False, hovered=False, st_highlight=False):
         if self.custom_color:
             color = self.custom_color
         else:
-            color = SELECTED_COLOR if self.highlight or selected else VERTEX_HOVER_COLOR if hovered else VERTEX_COLOR
+            if self.custom_color:
+                color = self.custom_color
+            elif selected:
+                color = SELECTED_COLOR
+            elif self.highlight:
+                color = HIGHLIGHT_COLOR
+            elif hovered:
+                color = VERTEX_HOVER_COLOR
+            else:
+                color = VERTEX_COLOR
 
-        pygame.draw.circle(screen, VERTEX_OUTLINE_COLOR, self.pos, VERTEX_RADIUS + 2)
+        outline_color = ST_OUTLINE_COLOR if st_highlight else VERTEX_OUTLINE_COLOR
+        pygame.draw.circle(screen, outline_color, self.pos, VERTEX_RADIUS + 2)
         pygame.draw.circle(screen, color, self.pos, VERTEX_RADIUS)
         # label = FONT.render(self.name, True, (255, 255, 255))
         # screen.blit(label, label.get_rect(center=self.pos))
@@ -52,8 +62,8 @@ class Edge:
             y1 += offset * math.cos(angle + offset_angle)
             x2 += -offset * math.sin(angle + offset_angle)
             y2 += offset * math.cos(angle + offset_angle)
-
-        pygame.draw.line(screen, color, (x1, y1), (x2, y2), 2)
+        thickness = 3 if self.highlight else 2
+        pygame.draw.line(screen, color, (x1, y1), (x2, y2), thickness)
         if show_weight:
             if self.value:
                 # Midpoint of the edge

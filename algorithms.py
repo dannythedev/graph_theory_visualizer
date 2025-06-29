@@ -57,8 +57,7 @@ class GraphAlgorithm:
         row_rect = pygame.Rect(10, y, 780, 20)
         hovered = row_rect.collidepoint(mouse_pos)
         color = (255, 255, 100) if hovered else (200, 200, 200)
-
-        if self.source and self.target:
+        if (self.source and self.target) and self.requires_source_target:
             st_label = f"({self.source},{self.target})"
         else:
             st_label = "-"
