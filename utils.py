@@ -15,7 +15,7 @@ class GraphState:
 
     def _hash_graph(self):
         v = tuple(sorted(v.name for v in self.get_vertices()))
-        e = tuple(sorted((e.start.name, e.end.name) for e in self.get_edges()))
+        e = tuple(sorted((e.start.name, e.end.name, str(e.value)) for e in self.get_edges()))  # include weights
         return hash((v, e))
 
     def invalidate(self):
@@ -72,7 +72,7 @@ class GraphState:
             if not directed:
                 adj[j].add(i)
 
-        self._indexed_adj[key] = adj
+        self._indexed_adj[key] = (adj, index_map)
         return adj, index_map
 
 
@@ -85,7 +85,13 @@ def dfs_stack(adj, start, visited):
             continue
         visited.add(node)
         neighbors = adj.get(node, [])
-        stack.extend(n for n, _ in neighbors if n not in visited)
+        for neighbor in neighbors:
+            # Handle both (neighbor,) and (neighbor, weight) formats
+            if isinstance(neighbor, tuple):
+                neighbor = neighbor[0]
+            if neighbor not in visited:
+                stack.append(neighbor)
+
 
 
 def generic_dfs(adj, v, visited, *, parent=None, rec_stack=None,
@@ -237,7 +243,7 @@ def deduplicate_edges_for_undirected(edges):
     edges[:] = new_edges  # Update the list in-place
 
 
-def generate_random_graph(vertices, edges, name_iter, min_v=5, max_v=24, min_e=5, max_e=30):
+def generate_random_graph(vertices, edges, name_iter, min_v=5, max_v=10, min_e=5, max_e=20):
     from graph import Vertex, Edge  # Already imported
     import random
 
@@ -305,3 +311,25 @@ def generate_random_graph(vertices, edges, name_iter, min_v=5, max_v=24, min_e=5
             edge_set.add(key)
         if len(edges) >= m:
             break
+
+import re
+
+def append_vertex_name_char(input_text: str, new_char: str) -> str:
+    if not new_char.isprintable():
+        return input_text
+
+    if len(input_text) >= 1:
+        last_char = input_text[-1]
+        if last_char.isalpha() and new_char.isdigit() and "_" not in input_text:
+            return input_text + "_" + new_char
+    return input_text + new_char
+
+
+def backspace_vertex_name(input_text: str) -> str:
+    """
+    Removes the last character. If that character is '_', also remove it.
+    """
+    if len(input_text) >= 2:
+        if input_text[-2] == "_":
+            return input_text[:-2]  # remove underscore
+    return input_text[:-1]

@@ -11,7 +11,7 @@ class Vertex:
         self.highlight = False
         self.custom_color = custom_color
 
-    def draw(self, screen, selected=False, hovered=False, st_highlight=False):
+    def draw(self, screen, selected=False, hovered=False, st_highlight=False, live_name=None):
         if self.custom_color:
             color = self.custom_color
         else:
@@ -29,9 +29,10 @@ class Vertex:
         outline_color = ST_OUTLINE_COLOR if st_highlight else VERTEX_OUTLINE_COLOR
         pygame.draw.circle(screen, outline_color, self.pos, VERTEX_RADIUS + 2)
         pygame.draw.circle(screen, color, self.pos, VERTEX_RADIUS)
-        # label = FONT.render(self.name, True, (255, 255, 255))
-        # screen.blit(label, label.get_rect(center=self.pos))
-        label = get_math_surface(self.name)
+        label_text = live_name if live_name is not None else self.name
+        label_color = DEBUG_HOVER_COLOR if live_name is not None else (255, 255, 255)
+        label = get_math_surface(label_text, color=label_color)
+        screen.blit(label, label.get_rect(center=self.pos))
         screen.blit(label, label.get_rect(center=self.pos))
 
     def is_clicked(self, pos):
@@ -48,7 +49,7 @@ class Edge:
         self.value = value
         self.highlight = False
 
-    def draw(self, screen, directed=False, offset_angle=0, show_weight=False):
+    def draw(self, screen, directed=False, offset_angle=0, show_weight=False, live_value=None):
         color = EDGE_HOVER_COLOR if self.highlight else EDGE_COLOR
         x1, y1 = self.start.pos
         x2, y2 = self.end.pos
@@ -65,6 +66,7 @@ class Edge:
         thickness = 3 if self.highlight else 2
         pygame.draw.line(screen, color, (x1, y1), (x2, y2), thickness)
         if show_weight:
+            display_value = live_value if live_value is not None else self.value
             if self.value:
                 # Midpoint of the edge
                 mid_x = (x1 + x2) / 2
@@ -82,8 +84,8 @@ class Edge:
                 # Apply the perpendicular offset
                 label_offset_x = mid_x + nx * normal_len
                 label_offset_y = mid_y + ny * normal_len
-
-                label = get_math_surface(str(self.value), color)
+                label_color = DEBUG_HOVER_COLOR if live_value is not None else (255, 255, 255)
+                label = get_math_surface(str(display_value), label_color)
                 rect = label.get_rect(center=(label_offset_x, label_offset_y))
                 screen.blit(label, rect)
 
@@ -174,7 +176,7 @@ def rebuild_edge_lookup(edges):
     return set((min(e.start.name, e.end.name), max(e.start.name, e.end.name)) for e in edges)
 
 
-def duplicate_graph(og_vertices, og_edges, spacing=(50, 50), times=1):
+def duplicate_graph(og_vertices, og_edges, spacing=(70, 70), times=1):
     """
     Duplicates the original graph `times` times in a grid layout,
     avoiding overlap and off-screen placement.

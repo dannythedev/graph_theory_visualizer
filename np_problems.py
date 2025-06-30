@@ -1,6 +1,8 @@
 import itertools
 import threading
 import pygame
+
+from config import DEBUG_HOVER_COLOR
 from math_text import get_math_surface
 from functools import lru_cache
 
@@ -77,7 +79,7 @@ class NPProblem:
         # Check hover over row
         full_area = pygame.Rect(10, y, 300, 20)
         hovered = full_area.collidepoint(mouse_pos)
-        color = (255, 255, 100) if hovered else (200, 200, 200)
+        color = DEBUG_HOVER_COLOR if hovered else (200, 200, 200)
 
         # Column values
         title = self.name

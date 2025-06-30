@@ -17,6 +17,7 @@ BUTTON_HOVER_COLOR = (70, 70, 70)
 BUTTON_TEXT_COLOR = (255, 255, 255)
 INPUT_BOX_COLOR = (40, 40, 40)
 INPUT_TEXT_COLOR = (255, 255, 255)
+DEBUG_HOVER_COLOR = (255, 255, 100)
 
 # Dimensions
 VERTEX_RADIUS = 20
@@ -29,7 +30,7 @@ FONT = pygame.font.SysFont("Segoe UI", 13, bold=True)
 INPUT_FONT = pygame.font.SysFont("consolas", 16, bold=True)
 DEBUG_FONT = pygame.font.SysFont("consolas", 16)
 
-def next_button(label, x, y, padding=12, height=32):
+def next_button(label, x, y, padding=7, height=32):
     """Create a button rect based on the label, starting at (x, y)."""
     width = FONT.render(label, True, (0, 0, 0)).get_width() + 2 * padding
     rect = pygame.Rect(x, y, width, height)
@@ -47,7 +48,7 @@ CLEAR_BUTTON_RECT, x = next_button("Clear", x, y)
 COMPLEMENT_BUTTON_RECT, x = next_button("Complement", x, y)
 DUPLICATE_BUTTON_RECT, x = next_button("Duplicate", x, y)
 RANDOM_BUTTON_RECT, x = next_button("Random", x, y)
-INCLUDE_ALGO_BUTTON_RECT, x = next_button("Include Algorithms: ON", x, y)
+INCLUDE_ALGO_BUTTON_RECT, x = next_button("Algorithms: ON", x, y)
 
 # Optional: Slider below Duplicate
 DUPLICATE_SLIDER_RECT = pygame.Rect(

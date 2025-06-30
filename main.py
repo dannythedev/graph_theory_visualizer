@@ -13,6 +13,7 @@ from np_problems import get_all_problems, mark_all_problems_dirty
 from utils import generate_color_for_index, update_k_value_from_input, get_next_available_vertex_name, draw_fps, \
     deduplicate_edges_for_undirected, generate_random_graph
 from zoom_manager import ZoomManager
+from utils import append_vertex_name_char, backspace_vertex_name
 
 def save_graph(vertices, edges, directed=False, show_weights=False, filename="graph.json"):
     with open(filename, "w") as f:
@@ -262,7 +263,7 @@ def handle_all_buttons(pos, vertices, edges, np_problems, algorithms, diagnostic
         return True, directed_state, True, include_algorithms
 
     elif CLEAR_BUTTON_RECT.collidepoint(pos):
-        return "reset", directed_state, show_weights, include_algorithms
+        return "reset", directed_state, False, include_algorithms
     return False, directed_state, show_weights, include_algorithms
 
 def main():
@@ -325,14 +326,17 @@ def main():
         for edge in edges:
             is_opposite = any(e.start == edge.end and e.end == edge.start for e in edges if e != edge)
             offset = math.pi / 18 if is_opposite and directed else 0
-            edge.draw(screen, directed=directed, offset_angle=offset, show_weight=show_weights)
+            live_val = input_text if input_mode == "edge" and input_target == edge else None
+            edge.draw(screen, directed=directed, offset_angle=offset, show_weight=show_weights, live_value=live_val)
 
         for vertex in vertices:
             is_st = vertex == source_vertex or vertex == target_vertex
+            live_name = input_text if input_mode == "vertex" and input_target == vertex else None
             vertex.draw(screen,
                         selected=(vertex == selected_vertex),
                         hovered=(vertex == hovered_vertex),
-                        st_highlight=is_st)
+                        st_highlight=is_st,
+                        live_name=live_name)
 
     def draw_all_buttons():
         save_hovered = SAVE_BUTTON_RECT.collidepoint(pos)
@@ -354,7 +358,7 @@ def main():
         draw_button(screen, RANDOM_BUTTON_RECT, "Random", random_hovered)
 
         include_algo_hovered = INCLUDE_ALGO_BUTTON_RECT.collidepoint(pos)
-        algo_text = f"Include Algorithms: {'ON' if include_algorithms else 'OFF'}"
+        algo_text = f"Algorithms: {'ON' if include_algorithms else 'OFF'}"
         draw_button(screen, INCLUDE_ALGO_BUTTON_RECT, algo_text, include_algo_hovered)
 
         st_hovered = SELECT_ST_BUTTON_RECT.collidepoint(pos)
@@ -412,10 +416,7 @@ def main():
                         if input_mode == 'vertex' and input_text and all(v.name != input_text for v in vertices):
                             input_target.name = input_text
                         elif input_mode == 'edge':
-                            try:
-                                input_target.value = str(int(input_text)) if input_text else None
-                            except ValueError:
-                                input_target.value = None
+                            input_target.value = str(int(input_text)) if input_text else None
                         input_mode = None
                         input_text = ""
                         mark_all_problems_dirty(np_problems)
@@ -423,14 +424,16 @@ def main():
                         diagnostics.mark_dirty()
 
                     elif event.key == pygame.K_BACKSPACE:
-                        input_text = input_text[:-1]
+                        input_text = backspace_vertex_name(input_text)
                     elif event.key == pygame.K_ESCAPE:
                         input_mode = None
                         input_text = ""
                     elif input_mode == "edge" and (event.unicode.isdigit() or (event.unicode == '-' and input_text == '')):
                         input_text += event.unicode
                     elif input_mode == "vertex":
-                        input_text += event.unicode
+                        if event.unicode.isalnum():
+                            if len(input_text.replace("_", "")) < 3:
+                                input_text = append_vertex_name_char(input_text, event.unicode.upper())
 
 
             elif event.type == pygame.MOUSEBUTTONDOWN and not input_mode:
@@ -678,47 +681,45 @@ def main():
             v.highlight = False
 
         if include_algorithms:
-            if not input_mode:
-                hovered_problem = None
-                y = 67
-                for solver in np_problems:
-                    y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed, compute_enabled=include_algorithms)
+            hovered_problem = None
+            y = 67
+            for solver in np_problems:
+                y, hovered, members = solver.render_debug(screen, DEBUG_FONT, k_value, y, pos, directed, compute_enabled=include_algorithms)
 
-                    if solver.name == "k-COLORING":
-                        apply_kcolor_highlight(solver, hovered, vertices)
+                if solver.name == "k-COLORING":
+                    apply_kcolor_highlight(solver, hovered, vertices)
 
-                    if hovered:
-                        hovered_problem = solver
+                if hovered:
+                    hovered_problem = solver
 
-                if hovered_problem:
-                    found, members = hovered_problem.result
-                    if found:
-                        apply_highlights(members, vertices, edges)
-                        highlight_edges(hovered_problem, members, edges)
+            if hovered_problem:
+                found, members = hovered_problem.result
+                if found:
+                    apply_highlights(members, vertices, edges)
+                    highlight_edges(hovered_problem, members, edges)
 
-                hovered_algorithm = None
-                y_start = screen.get_height() - len(algorithms) * 20 - 15
-                y = y_start
-                for alg in algorithms:
-                    y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
-                    if hovered:
-                        hovered_algorithm = (alg, elements)
+            hovered_algorithm = None
+            y_start = screen.get_height() - len(algorithms) * 20 - 15
+            y = y_start
+            for alg in algorithms:
+                y, hovered, elements = alg.render_debug(screen, DEBUG_FONT, y, pos, directed)
+                if hovered:
+                    hovered_algorithm = (alg, elements)
 
-                if hovered_algorithm:
-                    _, elements = hovered_algorithm
-                    if hovered_algorithm[0].name in ["PRIM", "KRUSKAL"]:
-                        elements = _.edge_result
-                    apply_highlights(elements, vertices, edges)
-                    highlight_edges_for_algorithms(elements, edges)
+            if hovered_algorithm:
+                _, elements = hovered_algorithm
+                if hovered_algorithm[0].name in ["PRIM", "KRUSKAL"]:
+                    elements = _.edge_result
+                apply_highlights(elements, vertices, edges)
+                highlight_edges_for_algorithms(elements, edges)
 
-                if not input_mode:
-                    diagnostics.update(directed=directed, compute_enabled=include_algorithms)
-                    diagnostics.render(screen, DEBUG_FONT, pos)
-                    if diagnostics.hovered_diagnostic:
-                        key, elements = diagnostics.hovered_diagnostic
-                        apply_highlights(elements, vertices, edges)
-                        if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
-                            apply_bipartite_highlight(np_problems, vertices, directed)
+            diagnostics.update(directed=directed, compute_enabled=include_algorithms)
+            diagnostics.render(screen, DEBUG_FONT, pos)
+            if diagnostics.hovered_diagnostic:
+                key, elements = diagnostics.hovered_diagnostic
+                apply_highlights(elements, vertices, edges)
+                if key == "Bipartite" and diagnostics.info.get("Bipartite") is True:
+                    apply_bipartite_highlight(np_problems, vertices, directed)
 
         draw_edges_and_vertices()
         draw_all_buttons()
@@ -727,18 +728,6 @@ def main():
         k_label = FONT.render(f"k={input_text if k_input_active else k_value}", True, BUTTON_TEXT_COLOR)
         label_rect = k_label.get_rect(center=K_INPUT_BOX_RECT.center)
         screen.blit(k_label, label_rect)
-
-        if input_mode:
-            EDIT_RECT_DYNAMIC = pygame.Rect(
-                10,
-                screen.get_height() - 50,
-                max(screen.get_width() - 500, 300),
-                40
-            )
-            pygame.draw.rect(screen, INPUT_BOX_COLOR, EDIT_RECT_DYNAMIC, border_radius=6)
-            label = "Editing Vertex Name:" if input_mode == 'vertex' else "Editing Edge Value:"
-            prompt = INPUT_FONT.render(f"{label} {input_text}", True, INPUT_TEXT_COLOR)
-            screen.blit(prompt, (20, EDIT_RECT_DYNAMIC.top + 15))
 
         draw_fps(screen, clock)
         physics.update()

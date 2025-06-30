@@ -1,4 +1,6 @@
 import pygame
+
+from config import DEBUG_HOVER_COLOR
 from math_text import get_math_surface
 from utils import generic_dfs, dfs_stack, GraphState
 
@@ -152,7 +154,7 @@ class GraphDiagnostics:
 
         for key, val in self.info.items():
             is_hovered = mouse_pos and pygame.Rect(10, y_start, 190, 15).collidepoint(mouse_pos)
-            color = (255, 255, 100) if is_hovered else (180, 180, 180)
+            color = DEBUG_HOVER_COLOR if is_hovered else (180, 180, 180)
 
             screen.blit(font.render(f"{key}:", True, color), (10, y_start))
 

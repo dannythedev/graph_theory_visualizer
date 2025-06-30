@@ -6,6 +6,7 @@ from heapq import heappush, heappop
 
 import pygame
 
+from config import DEBUG_HOVER_COLOR
 from math_text import get_math_surface
 from utils import GraphState
 
@@ -75,7 +76,7 @@ class GraphAlgorithm:
         self.update(self.source, self.target, directed)
         row_rect = pygame.Rect(10, y, 300, 20)
         hovered = row_rect.collidepoint(mouse_pos)
-        color = (255, 255, 100) if hovered else (200, 200, 200)
+        color = DEBUG_HOVER_COLOR if hovered else (200, 200, 200)
         if (self.source and self.target) and self.requires_source_target:
             st_label = f"({self.source},{self.target})"
         else:
