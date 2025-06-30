@@ -4,6 +4,78 @@ from string import ascii_uppercase
 from config import AVOID_COLORS, VERTEX_RADIUS, DEBUG_FONT
 import pygame
 
+class GraphState:
+    def __init__(self, get_vertices, get_edges):
+        self.get_vertices = get_vertices
+        self.get_edges = get_edges
+        self._last_hash = None
+        self._adj = None
+        self._rev_adj = None
+        self._indexed_adj = {}
+
+    def _hash_graph(self):
+        v = tuple(sorted(v.name for v in self.get_vertices()))
+        e = tuple(sorted((e.start.name, e.end.name) for e in self.get_edges()))
+        return hash((v, e))
+
+    def invalidate(self):
+        self._last_hash = None
+
+    def _check_update(self):
+        new_hash = self._hash_graph()
+        if new_hash != self._last_hash:
+            self._adj_dict = {}
+            self._rev_adj = None
+            self._indexed_adj.clear()
+            self._last_hash = new_hash
+
+    def get_adj(self, directed=False):
+        self._check_update()
+        key = "directed" if directed else "undirected"
+        if not hasattr(self, "_adj_dict"):
+            self._adj_dict = {}
+
+        if key in self._adj_dict:
+            return self._adj_dict[key]
+
+        adj = {v.name: [] for v in self.get_vertices()}
+        for e in self.get_edges():
+            w = float(e.value) if e.value is not None else 1.0
+            adj[e.start.name].append((e.end.name, w))
+            if not directed:
+                adj[e.end.name].append((e.start.name, w))
+
+        self._adj_dict[key] = adj
+        return adj
+
+    def get_rev_adj(self):
+        self._check_update()
+        if self._rev_adj is None:
+            rev = {v.name: set() for v in self.get_vertices()}
+            for e in self.get_edges():
+                rev[e.end.name].add(e.start.name)
+            self._rev_adj = rev
+        return self._rev_adj
+
+    def get_indexed_adj(self, directed=False):
+        self._check_update()
+        key = directed
+        if key in self._indexed_adj:
+            return self._indexed_adj[key]
+
+        index_map = {v.name: i for i, v in enumerate(self.get_vertices())}
+        adj = {i: set() for i in index_map.values()}
+        for e in self.get_edges():
+            i = index_map[e.start.name]
+            j = index_map[e.end.name]
+            adj[i].add(j)
+            if not directed:
+                adj[j].add(i)
+
+        self._indexed_adj[key] = adj
+        return adj, index_map
+
+
 def dfs_stack(adj, start, visited):
     """Iterative DFS to visit all reachable nodes from `start`."""
     stack = [start]
@@ -12,7 +84,8 @@ def dfs_stack(adj, start, visited):
         if node in visited:
             continue
         visited.add(node)
-        stack.extend(n for n in adj[node] if n not in visited)
+        neighbors = adj.get(node, [])
+        stack.extend(n for n, _ in neighbors if n not in visited)
 
 
 def generic_dfs(adj, v, visited, *, parent=None, rec_stack=None,
@@ -34,7 +107,7 @@ def generic_dfs(adj, v, visited, *, parent=None, rec_stack=None,
         time[0] += 1
 
     neighbors = adj[v]
-    for n in neighbors:
+    for n, _ in neighbors:
         if n == parent:
             continue
         if n not in visited:
@@ -61,7 +134,7 @@ def generic_dfs(adj, v, visited, *, parent=None, rec_stack=None,
 def dfs_paths_backtrack(adj, path, visited, on_path_found):
     """Simple recursive DFS for full-path traversal (used for longest paths)."""
     on_path_found(path)
-    for neighbor in adj[path[-1]]:
+    for neighbor, _ in adj[path[-1]]:
         if neighbor not in visited:
             dfs_paths_backtrack(adj, path + [neighbor], visited | {neighbor}, on_path_found)
 

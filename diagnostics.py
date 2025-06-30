@@ -1,6 +1,6 @@
 import pygame
 from math_text import get_math_surface
-from utils import generic_dfs, dfs_stack
+from utils import generic_dfs, dfs_stack, GraphState
 
 
 class GraphDiagnostics:
@@ -11,12 +11,17 @@ class GraphDiagnostics:
         self.edges = edges
         self.info = {}
         self.bridges = []
+        self.graph_state = GraphState(lambda: self.vertices, lambda: self.edges)
 
     def reset(self):
-        self.__init__(self.vertices, self.edges)
+        self.hovered_diagnostic = None
+        self.needs_update = True
+        self.info.clear()
+        self.bridges.clear()
 
     def mark_dirty(self):
         self.needs_update = True
+        self.graph_state.invalidate()
 
     def update(self, directed=False, compute_enabled=True):
         if compute_enabled:
@@ -24,9 +29,8 @@ class GraphDiagnostics:
                 return
             self.needs_update = False
 
-            self.adj = self._build_adj(directed)
-            self.rev_adj = self._build_adj_reverse() if directed else None
-
+            self.adj = self.graph_state.get_adj(directed)
+            self.rev_adj = self.graph_state.get_rev_adj() if directed else None
 
             # Core structure
             self.info.clear()
@@ -72,20 +76,6 @@ class GraphDiagnostics:
 
         return bridges
 
-    def _build_adj(self, directed):
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
-        return adj
-
-    def _build_adj_reverse(self):
-        rev = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            rev[e.end.name].add(e.start.name)
-        return rev
-
     def _has_cycle(self, directed, visited):
         if directed:
             rec_stack = set()
@@ -99,10 +89,20 @@ class GraphDiagnostics:
                     return True
                 return None
         else:
-            tin, low, time = {}, {}, [0]
+            def dfs(u, parent):
+                visited.add(u)
+                for v, _ in self.adj[u]:
+                    if v not in visited:
+                        if dfs(v, u):
+                            return True
+                    elif v != parent:
+                        return True
+                return False
+
             for v in self.adj:
                 if v not in visited:
-                    generic_dfs(self.adj, v, visited, tin=tin, low=low, time=time)
+                    if dfs(v, None):
+                        return True
             return False
 
     def _component_count(self, visited):
@@ -138,7 +138,7 @@ class GraphDiagnostics:
                 color[v] = 0
                 while queue:
                     u = queue.pop()
-                    for n in self.adj[u]:
+                    for n, _ in self.adj[u]:
                         if n not in color:
                             color[n] = 1 - color[u]
                             queue.append(n)
@@ -151,7 +151,7 @@ class GraphDiagnostics:
         self.hovered_diagnostic = None
 
         for key, val in self.info.items():
-            is_hovered = mouse_pos and pygame.Rect(10, y_start, 780, 15).collidepoint(mouse_pos)
+            is_hovered = mouse_pos and pygame.Rect(10, y_start, 190, 15).collidepoint(mouse_pos)
             color = (255, 255, 100) if is_hovered else (180, 180, 180)
 
             screen.blit(font.render(f"{key}:", True, color), (10, y_start))

@@ -5,6 +5,7 @@ from math_text import get_math_surface
 from functools import lru_cache
 
 from utils import dfs_paths_backtrack, dfs_stack
+from utils import GraphState
 
 
 class NPProblem:
@@ -16,29 +17,21 @@ class NPProblem:
         self.result = (None, [])  # None = still computing
         self.edge_members = []  # store solver-returned edges
         self.needs_update = True
-
+        self.graph_state = GraphState(lambda: self.vertices, lambda: self.edges)
         self._thread = None
+        self._last_state_key = None
+        self._render_cache = []  # List of (bounding_rect, surfaces_to_blit)
+        self._cached_mouse_pos = None  # Optional: skip repeat hovers on same row
 
     def reset(self):
-        self.__init__(self.vertices, self.edges)
+        self.k = None
+        self.result = (None, [])
+        self.edge_members = []
+        self.needs_update = True
+        self._thread = None
+        self.graph_state.invalidate()
+        self._last_state_key = None
 
-    def build_adj(self, directed):
-        adj = {v.name: set() for v in self.vertices}
-        for e in self.edges:
-            adj[e.start.name].add(e.end.name)
-            if not directed:
-                adj[e.end.name].add(e.start.name)
-        return adj
-
-    def build_indexed_adj(self, directed, n, index_map):
-        adj = {i: set() for i in range(n)}
-        for edge in self.edges:
-            u = index_map[edge.start.name]
-            v = index_map[edge.end.name]
-            adj[u].add(v)
-            if not directed:
-                adj[v].add(u)
-        return adj
 
     def compute(self, k, directed):  # Override in subclasses
         return False, []
@@ -64,7 +57,17 @@ class NPProblem:
                 self.k = k
                 self.result = (None, [])
                 self.needs_update = False
-                self._thread = threading.Thread(target=self._run_compute_thread, args=(k, directed))
+
+                # Join previous thread if still running
+                if self._thread is not None and self._thread.is_alive():
+                    self._thread.join()
+
+                # Start new compute thread
+                self._thread = threading.Thread(
+                    target=self._run_compute_thread,
+                    args=(k, directed),
+                    daemon=True  # Ensures it doesn't block program exit
+                )
                 self._thread.start()
 
     def render_debug(self, screen, font, k, y, mouse_pos, directed, compute_enabled=True):
@@ -72,7 +75,7 @@ class NPProblem:
         found, members = self.result
 
         # Check hover over row
-        full_area = pygame.Rect(10, y, 780, 20)
+        full_area = pygame.Rect(10, y, 300, 20)
         hovered = full_area.collidepoint(mouse_pos)
         color = (255, 255, 100) if hovered else (200, 200, 200)
 
@@ -116,7 +119,7 @@ class IndependentSetSolver(NPProblem):
         edge_count = len(self.edges)
         if not directed and edge_count >= len(self.vertices) * (len(self.vertices) - 1) // 2:
             return False, []
-        adj = self.build_adj(directed)
+        adj = self.graph_state.get_adj(directed)
         for combo in itertools.combinations(self.vertices, k):
             names = [v.name for v in combo]
             if all(n2 not in adj[n1] for i, n1 in enumerate(names) for n2 in names[i+1:]):
@@ -177,7 +180,7 @@ class HamiltonianPathSolver(NPProblem):
         n = len(self.vertices)
 
         # Build adjacency list (indexed)
-        adj = self.build_indexed_adj(directed, n, index_map)
+        adj, index_map = self.graph_state.get_indexed_adj(directed)
 
         @lru_cache(maxsize=None)
         def dp(current, visited):
@@ -213,7 +216,7 @@ class KColoringSolver(NPProblem):
             return False, []
 
         # Build adjacency map
-        adj = self.build_adj(directed)
+        adj = self.graph_state.get_adj(directed)
 
         # Recursive backtracking to try color assignments
         names = [v.name for v in self.vertices]
@@ -260,7 +263,7 @@ class HamiltonianCycleSolver(NPProblem):
         n = len(self.vertices)
 
         # Build adjacency list (indexed)
-        adj = self.build_indexed_adj(directed, n, index_map)
+        adj, index_map = self.graph_state.get_indexed_adj(directed)
 
         @lru_cache(maxsize=None)
         def dp(current, visited):
@@ -303,7 +306,7 @@ class MinCutSolver(NPProblem):
             return False, []
 
         # Build adjacency map
-        adj = self.build_adj(directed)
+        adj = self.graph_state.get_adj(directed)
 
         def is_disconnected(excluded):
             seen = set()
@@ -333,7 +336,7 @@ class LongestPathSolver(NPProblem):
         super().__init__("LONGEST-PATH", v, e)
 
     def compute(self, k, directed=False):
-        adj = self.build_adj(directed)
+        adj = self.graph_state.get_adj(directed)
         longest = []
 
         def on_path_found(path):

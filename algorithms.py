@@ -1,12 +1,18 @@
 # algorithms.py
-import pygame
 import heapq
 import threading
-from math_text import get_math_surface
 import math
+from heapq import heappush, heappop
+
+import pygame
+
+from math_text import get_math_surface
+from utils import GraphState
+
 
 class GraphAlgorithm:
     def __init__(self, name, vertices, edges):
+        self._last_state_key = None
         self.name = name
         self.vertices = vertices
         self.edges = edges
@@ -17,9 +23,12 @@ class GraphAlgorithm:
         self.source = None
         self.target = None
         self.needs_update = True
+        self.graph_state = GraphState(lambda: self.vertices, lambda: self.edges)
 
         self._thread = None
         self._result_ready = False
+        self._render_cache = []  # List of (bounding_rect, surfaces_to_blit)
+        self._cached_mouse_pos = None  # Optional: skip repeat hovers on same row
 
     def reset(self):
         self.result.clear()
@@ -28,23 +37,32 @@ class GraphAlgorithm:
         self.needs_update = True
         self._thread = None
         self._result_ready = False
+        self._last_state_key = None
 
     def update(self, source, target, directed=False, compute_enabled=True):
-        if compute_enabled:
-            if source != self.source or target != self.target:
-                self.needs_update = True
+        if not compute_enabled:
+            return
 
-            self.source = source
-            self.target = target
+        state_key = (self.graph_state._hash_graph(), source, target, directed)
 
-            if self.needs_update and (not self.requires_source_target or (source and target)) and self._thread is None:
-                self.result.clear()
-                self.edge_result.clear()
-                self.active = False
-                self.needs_update = False
-                self._result_ready = False
-                self._thread = threading.Thread(target=self._run_thread, args=(source, target, directed))
-                self._thread.start()
+        if getattr(self, "_last_state_key", None) == state_key:
+            return  # no change
+
+        self._last_state_key = state_key
+        self.source = source
+        self.target = target
+        self.needs_update = True
+
+        if self.requires_source_target and (not source or not target):
+            return
+
+        if self._thread is None and self.needs_update:
+            self.result.clear()
+            self.edge_result.clear()
+            self.active = False
+            self._result_ready = False
+            self._thread = threading.Thread(target=self._run_thread, args=(source, target, directed), daemon=True)
+            self._thread.start()
 
     def _run_thread(self, source, target, directed):
         self.run(source, target, directed)
@@ -52,9 +70,10 @@ class GraphAlgorithm:
         self.active = True
         self._thread = None
 
+
     def render_debug(self, screen, font, y, mouse_pos, directed):
         self.update(self.source, self.target, directed)
-        row_rect = pygame.Rect(10, y, 780, 20)
+        row_rect = pygame.Rect(10, y, 300, 20)
         hovered = row_rect.collidepoint(mouse_pos)
         color = (255, 255, 100) if hovered else (200, 200, 200)
         if (self.source and self.target) and self.requires_source_target:
@@ -89,7 +108,6 @@ class GraphAlgorithm:
         screen.blit(result_surface, (220, y))
 
         return y + 20, hovered, elements
-
     def has_negative_weights(self):
         for e in self.edges:
             try:
@@ -112,15 +130,7 @@ class DijkstraSolver(GraphAlgorithm):
             self.active = True
             return
 
-        adj = {v.name: [] for v in self.vertices}
-        for e in self.edges:
-            try:
-                w = float(e.value) if e.value is not None else 1.0
-            except ValueError:
-                w = 1.0
-            adj[e.start.name].append((e.end.name, w))
-            if not directed:
-                adj[e.end.name].append((e.start.name, w))
+        adj = self.graph_state.get_adj(directed)
 
         dist = {v: float('inf') for v in adj}
         prev = {}
@@ -165,15 +175,8 @@ class BellmanFordSolver(GraphAlgorithm):
         super().__init__("BELLMAN-FORD", vertices, edges)
 
     def run(self, source_name, target_name=None, directed=False):
-        adj = {v.name: [] for v in self.vertices}
-        for e in self.edges:
-            try:
-                w = float(e.value) if e.value is not None else 1.0
-            except ValueError:
-                w = 1.0
-            adj[e.start.name].append((e.end.name, w))
-            if not directed:
-                adj[e.end.name].append((e.start.name, w))
+        adj = self.graph_state.get_adj(directed)
+
 
         dist = {v: float('inf') for v in adj}
         prev = {}
@@ -240,15 +243,8 @@ class AStarSolver(GraphAlgorithm):
         return 0
 
     def run(self, source_name, target_name=None, directed=False):
-        adj = {v.name: [] for v in self.vertices}
-        for e in self.edges:
-            try:
-                w = float(e.value) if e.value is not None else 1.0
-            except ValueError:
-                w = 1.0
-            adj[e.start.name].append((e.end.name, w))
-            if not directed:
-                adj[e.end.name].append((e.start.name, w))
+        adj = self.graph_state.get_adj(directed)
+
 
         if self.has_negative_weights():
             self.result = []
@@ -341,6 +337,17 @@ class PrimSolver(GraphAlgorithm):
         super().__init__("PRIM", vertices, edges)
         self.requires_source_target = False
 
+    def get_weighted_undirected_adj(self):
+        adj = {v.name: [] for v in self.vertices}
+        for e in self.edges:
+            try:
+                w = float(e.value) if e.value is not None else 1.0
+            except ValueError:
+                w = 1.0
+            adj[e.start.name].append((w, e.end.name))
+            adj[e.end.name].append((w, e.start.name))
+        return adj
+
     def run(self, source_name=None, target_name=None, directed=False):
         if directed or not self.vertices:
             self.result = []
@@ -348,13 +355,7 @@ class PrimSolver(GraphAlgorithm):
             self.active = True
             return
 
-        from heapq import heappush, heappop
-
-        adj = {v.name: [] for v in self.vertices}
-        for e in self.edges:
-            w = float(e.value) if e.value is not None else 1.0
-            adj[e.start.name].append((w, e.end.name))
-            adj[e.end.name].append((w, e.start.name))
+        adj = self.get_weighted_undirected_adj()
 
         visited = set()
         mst_edges = []
@@ -380,7 +381,6 @@ class PrimSolver(GraphAlgorithm):
         self.result = mst_edges
         self.edge_result = mst_edges
         self.active = True
-
 
 
 def get_all_algorithms(vertices, edges):
