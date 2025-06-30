@@ -230,12 +230,11 @@ class KColoringSolver(NPProblem):
 
             node = names[index]
             for color in range(k):
-                if all(color_map.get(neigh) != color for neigh in adj[node]):
+                if all(color_map.get(neigh_name) != color for neigh_name, _ in adj[node]):
                     color_map[node] = color
                     if backtrack(index + 1):
                         return True
-                    del color_map[node]  # backtrack
-
+                    del color_map[node]
             return False
 
         success = backtrack(0)
