@@ -113,19 +113,27 @@ class NPProblem:
 
 class IndependentSetSolver(NPProblem):
     def __init__(self, v, e): super().__init__("INDEPENDENT-SET", v, e)
+
     def compute(self, k, directed=False):
         if k > len(self.vertices):
             return False, []
 
-        # Optional: skip if graph is fully connected
-        edge_count = len(self.edges)
-        if not directed and edge_count >= len(self.vertices) * (len(self.vertices) - 1) // 2:
-            return False, []
         adj = self.graph_state.get_adj(directed)
+
+        # Flatten adj into name -> set(name)
+        adj_flat = {u: set(v for v, _ in neighbors) for u, neighbors in adj.items()}
+
+        # Ensure symmetry in undirected case
+        if not directed:
+            for u in list(adj_flat):
+                for v in adj_flat[u]:
+                    adj_flat.setdefault(v, set()).add(u)
+
         for combo in itertools.combinations(self.vertices, k):
             names = [v.name for v in combo]
-            if all(n2 not in adj[n1] for i, n1 in enumerate(names) for n2 in names[i+1:]):
+            if all(n2 not in adj_flat[n1] for i, n1 in enumerate(names) for n2 in names[i + 1:]):
                 return True, names
+
         return False, []
 
 
