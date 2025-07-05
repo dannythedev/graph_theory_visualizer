@@ -362,6 +362,30 @@ class LongestPathSolver(NPProblem):
             return True, longest, eds
         return False, [], []
 
+class DominatingSetSolver(NPProblem):
+    def __init__(self, v, e):
+        super().__init__("DOMINATING-SET", v, e)
+
+    def compute(self, k, directed=False):
+        if k > len(self.vertices):
+            return False, []
+
+        adj = self.graph_state.get_adj(directed)
+
+        # Flatten: name -> set of neighbors
+        adj_flat = {u: set(v for v, _ in neighbors) for u, neighbors in adj.items()}
+        all_nodes = {v.name for v in self.vertices}
+
+        for combo in itertools.combinations(self.vertices, k):
+            dom_set = {v.name for v in combo}
+            covered = set(dom_set)
+            for v in dom_set:
+                covered.update(adj_flat.get(v, []))
+            if covered >= all_nodes:
+                return True, list(dom_set)
+
+        return False, []
+
 
 def get_all_problems(vertices, edges):
     return [
@@ -373,7 +397,7 @@ def get_all_problems(vertices, edges):
         IndependentSetSolver(vertices, edges),
         CliqueSolver(vertices, edges),
         MinCutSolver(vertices, edges),
-
+        DominatingSetSolver(vertices,edges)
     ]
 
 def mark_all_problems_dirty(problems):
